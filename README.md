@@ -1,29 +1,49 @@
-# DEAP Connect — KTx-CONNECT Experience Layer
+# DEAP Connect — Patient/Caregiver + Clinician Full-Stack Demo
 
-**Cincinnati Children's Digital Health Hackathon 2026**
+**Synthetic hackathon prototype only. Not for clinical use.**
 
-A patient-and-family experience prototype for the Digitally-Enabled Adherence Platform (DEAP), building on the existing KTx-CONNECT demonstration and its MAPS clinical workflow.
+## Start the application
 
-> **Pre-pilot prototype with sample data. Not for clinical use.**
+Requires Python 3.9+; no external packages or internet connection.
 
-## Problem
-Medication adherence is essential for adolescent kidney transplant recipients. The project explores a supportive, accessible experience that helps patients and caregivers identify barriers and stay engaged between clinic visits.
+```bash
+cd DEAP_Connect_FullStack
+python3 server.py
+```
 
-## Prototype features
-- SMS-style onboarding and barrier assessment
-- Patient-selected primary barrier and preferences for existing MAPS strategies
-- Personalized reminder timing, tone, channel, and language previews
-- Caregiver mode and English/Spanish patient experience
-- Daily check-ins, weekly Green / Yellow / Red reflections, and gentle re-engagement
-- Patient progress visualization
-- Clinician dashboard, attention queue, and exploratory reports
-- Fictional sample patients and simulated real-time updates
+Open both views in the same browser or different browsers on the same computer:
 
-## Run the demo
-Open `KTx_CONNECT_DEAP_Experience_v2.html` in a modern web browser once the prototype file has been added to this repository. The demo uses HTML, CSS, and JavaScript with no backend.
+- Clinician: http://localhost:8000/clinician.html
+- Patient/caregiver: http://localhost:8000/patient.html
 
-## Clinical boundaries
-The project does not modify the evidence-based MAPS protocol. Barrier wording, message templates, and any missed-dose guidance are placeholders requiring clinical review. No real patient information is used, and no real messages are sent.
+Do **not** open `patient.html` by double-clicking it (`file://`): the shared backend requires the server.
 
-## Next steps
-Validate usability with patients, caregivers, and clinicians; integrate approved DEAP data interfaces; and evaluate engagement, check-in response rates, usability, and clinically approved adherence measures in the proposed pilot.
+## Architecture
+
+- `patient_v1_locked.html` — untouched, locked snapshot of personalized patient/caregiver v1.0.
+- `patient.html` — identical core UX with an additive backend synchronization adapter and read-only care-team note.
+- `clinician.html` — clinician roster, attention queue, patient details, reporting, and care-team follow-up notes.
+- `server.py` — Python standard-library HTTP server + JSON API + SQLite database.
+- `deap_demo.sqlite3` — automatically created local database with 12 fictional patient records.
+
+Patient data is saved to the browser's localStorage and synchronized to the SQLite backend. Clinician changes are fetched by the patient app every five seconds; the clinician portal refreshes every four seconds. Patient identities are anonymous demo IDs stored in the browser; multiple tabs of the same browser profile share the same demo patient identity. Separate browser profiles create separate patients.
+
+### API
+
+- `GET /api/health`
+- `GET /api/patients`
+- `GET /api/patients/{id}`
+- `PUT /api/patients/{id}` JSON `{ "state": {...} }`
+- `POST /api/patients/{id}/care-plan` JSON `{ "carePlan": "..." }`
+
+### Demonstrate
+
+1. Start the server and open both views in two tabs.
+2. Complete patient onboarding with fictional names and barrier choices.
+3. See the new patient in clinician roster.
+4. Submit a Red/Yellow check-in or contact request; see the attention queue update.
+5. Save a care-team follow-up note; see it appear in the patient Today view.
+
+### Safety and limitations
+
+No authentication, authorization, transport security, auditing, HIPAA compliance, real SMS, EHR integration, or verified clinical assessment content. Do not deploy publicly or use real patient data. Barrier labels are demo placeholders, not the validated MAPS instrument. Status rules are illustrative workflow rules, not clinical risk scores. Clinician notes are demo messages, not medical instructions. Reset demo data by stopping the server and deleting `deap_demo.sqlite3`.
