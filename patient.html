@@ -1184,7 +1184,7 @@
           deapId = 'patient-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36));
           localStorage.setItem(DEAP_ID_KEY, deapId);
           deapCarePlan = '';
-          deapEscStage = 'none';
+          deapLastSent = null;
           return go('sms')
         }
       }
@@ -1260,6 +1260,7 @@
     }
     let deapSyncTimer = null,
       deapSending = Promise.resolve(),
+      deapLastSent = null,
       deapCarePlan = '';
     const deapBanner = document.createElement('div');
     deapBanner.id = 'deapConnection';
@@ -1277,20 +1278,24 @@
 
     function deapPush() {
       if (!s.patientName.trim()) return;
-      const snapshot = JSON.parse(JSON.stringify(s));
-      deapSending = deapSending.catch(() => {}).then(() => fetch('/api/patients/' + encodeURIComponent(
-        deapId), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          state: snapshot
-        })
-      }).then(r => {
-        if (!r.ok) throw Error('Sync failed');
-        deapStatus(true)
-      }).catch(() => deapStatus(false)));
+      deapSending = deapSending.catch(() => {}).then(() => {
+        const id = deapId;
+        const body = JSON.stringify({
+          state: s
+        });
+        if (id + body === deapLastSent) return;
+        return fetch('/api/patients/' + encodeURIComponent(id), {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body
+        }).then(r => {
+          if (!r.ok) throw Error('Sync failed');
+          deapLastSent = id + body;
+          deapStatus(true)
+        }).catch(() => deapStatus(false))
+      });
     }
 
     function deapSchedule() {
@@ -1310,6 +1315,8 @@
         const r = await fetch('/api/patients/' + encodeURIComponent(deapId), {
           cache: 'no-store'
         });
+        // Server no longer has this patient (e.g. demo database was reset): send state again.
+        if (r.status === 404) deapLastSent = null;
         if (!r.ok) return;
         const data = await r.json();
         deapStatus(true);
@@ -1343,30 +1350,11 @@
     };
     render();
     deapPoll();
+    // One fetch per poll; deapPush only sends when the state changed since the last successful send.
     setInterval(() => {
       deapPoll();
       deapPush()
     }, 5000);
-
-    // Read-only, simulated engagement status; never represents medical monitoring.
-    let deapEscStage = 'none';
-    const deapPollOriginal = deapPoll;
-    deapPoll = async function() {
-      await deapPollOriginal();
-      if (!s.patientName.trim()) return;
-      try {
-        const r = await fetch('/api/patients/' + encodeURIComponent(deapId), {
-          cache: 'no-store'
-        });
-        if (!r.ok) return;
-        const data = await r.json();
-        const stage = data.patient?.escalation?.stage || 'none';
-        if (stage !== deapEscStage) {
-          deapEscStage = stage;
-          render()
-        }
-      } catch (e) {}
-    };
   </script>
  </body>
 </html>
