@@ -79,6 +79,10 @@ The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link o
 - Caregiver of a patient under 10: sees everything about the child.
 - The server enforces these rules: each link's page only receives what that person may see, and family records cannot be read through the open patient endpoint.
 
+**Hand-off of responsibility.** "Who leads" (set at enrollment, changeable in patient detail; every change is logged) decides who gets reminders and "Is your plan working?" check-backs: Parent leads → caregiver; Shared → both; Patient leads → patient only. A caregiver is only asked about plans the patient shares with them. Under 10 the caregiver always gets them. For Patient leads the 24-hour caregiver-notice stage is skipped (clinician review only).
+
+New Spanish text for families (who sees what, sharing, hand-off) is a draft translation for the clinical team to review.
+
 ### Chart risk signals (demo — no real EHR)
 
 Packet must-keep #6: use risk signals already in the chart. All chart data here is fictional and stored in server tables (`chart_visits`, `labs`), never in the patient's state. Three flags, computed on the server:

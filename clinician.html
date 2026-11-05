@@ -852,9 +852,11 @@
         w = t.latestWeekly;
       const ans = a ? `<div class="patientsays"><small>Patient says</small> <strong style="display:inline">${esc(answerNames[a.answer]||a.answer)}</strong>${a.note&&a.note.trim()?`<div class="ownwords">${esc(a.note)}</div>`:''}<div class="meta">${esc(longDate(a.at))} · ${a.for===t.dueDate?'for this check-back':'for an earlier check-back'}</div></div>` :
         '<div class="meta">No check-back answer from the patient yet.</div>';
+      const ca = t.caregiverAnswer;
+      const cg = ca ? `<div class="patientsays"><small>Caregiver says</small> <strong style="display:inline">${esc(answerNames[ca.answer]||ca.answer)}</strong>${ca.note&&ca.note.trim()?`<div class="ownwords">${esc(ca.note)}</div>`:''}<div class="meta">${esc(longDate(ca.at))} · ${ca.for===t.dueDate?'for this check-back':'for an earlier check-back'}</div></div>` : '';
       const wk = w ? `<div class="meta">Latest weekly answer: <strong style="display:inline">${esc(w.status.charAt(0).toUpperCase()+w.status.slice(1))}</strong> · ${esc(shortDate(w.date))}${w.note&&w.note.trim()?' · “'+esc(w.note)+'”':''}</div>` :
         '<div class="meta">No weekly answer yet.</div>';
-      return `<div class="patientctx">${ans}${wk}</div>`
+      return `<div class="patientctx">${ans}${cg}${wk}</div>`
     }
 
     const MISMATCH = "Check-in and chart don't match — worth reviewing together.";
@@ -973,8 +975,11 @@
       const g = taskGroup(t);
       if (g === 'needs') return 'Make plan';
       if (g === 'overdue' || g === 'today') {
-        const a = t.patientAnswer;
-        return 'Check back: ' + (a && a.for === t.dueDate ? saysNext[a.answer] || a.answer : 'no answer from the patient yet')
+        const a = t.patientAnswer,
+          ca = t.caregiverAnswer;
+        if (a && a.for === t.dueDate) return 'Check back: ' + (saysNext[a.answer] || a.answer);
+        if (ca && ca.for === t.dueDate) return 'Check back: ' + (saysNext[ca.answer] || ca.answer).replace('patient', 'caregiver');
+        return 'Check back: no answer from the patient yet'
       }
       return (g === 'later' ? 'Keep checking · next check-back ' : 'Check back on ') + shortDate(t.dueDate)
     }
@@ -1053,7 +1058,7 @@
     function familyPanel(p) {
       const f = p.family;
       if (!f) return '';
-      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong></div>${whoSeesSummary(p)}${answersTable(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
+      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong><div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><label class="muted" for="leadsSelect">Change who leads</label><select id="leadsSelect">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}" ${f.leads===k?'selected':''}>${v}</option>`).join('')}</select><span id="leadsMsg" class="muted" role="status"></span></div><div class="meta">${f.leads==='parent'?`Reminders and check-backs go to ${esc(f.caregiverName)}.`:f.leads==='shared'?`Reminders and check-backs go to ${esc(p.patientName)} and ${esc(f.caregiverName)}.`:`Reminders and check-backs go to ${esc(p.patientName)} only; no caregiver notice stage.`}</div></div>${whoSeesSummary(p)}${answersTable(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
     }
 
     function enroll() {
@@ -1398,6 +1403,27 @@
         render()
       }
       if (e.target.id === 'enLeads') leadsTouched = true;
+      if (e.target.id === 'leadsSelect' && selected) {
+        const sel = e.target;
+        sel.disabled = true;
+        fetch('/api/families/' + encodeURIComponent(selected) + '/leads', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            leads: sel.value,
+            by: worklistRole !== 'all' ? worklistRole : undefined
+          })
+        }).then(async r => {
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
+          await refresh();
+          render()
+        }).catch(err => {
+          sel.disabled = false;
+          if (el('leadsMsg')) el('leadsMsg').textContent = 'Could not save: ' + err.message
+        })
+      }
       if (e.target.id === 'showAllTasks') {
         showAllTasks = e.target.checked;
         render()

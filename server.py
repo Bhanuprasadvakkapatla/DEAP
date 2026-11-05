@@ -336,6 +336,16 @@ def save_caregiver_state(c, fid, state):
     if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers")):
         main = json.loads(c.execute("SELECT state FROM patients WHERE id=?", (fid,)).fetchone()["state"])
         sync_tasks(c, fid, main)
+    log_checkbacks(c, fid, old.get("checkbacks") or {}, state.get("checkbacks") or {}, "Caregiver")
+    # When the caregiver helps lead, their check-ins count as activity for the family.
+    leads = c.execute("SELECT leads FROM families WHERE id=?", (fid,)).fetchone()["leads"]
+    if leads != "patient" and any(
+        state.get(k) != old.get(k) for k in ("daily", "weekly", "contactRequests", "checkbacks")
+    ):
+        c.execute(
+            "UPDATE patients SET last_engagement=?, demo_offset_hours=0 WHERE id=?", (iso(), fid)
+        )
+        record_activity(c, fid)
 
 
 def invite_row(c, token):
@@ -365,6 +375,19 @@ def invite_view(c, inv):
     }
     sharing = family_sharing(main, inv["leads"])
     who["sharing"] = sharing
+    # Who leads decides who gets reminders and "Is your plan working?" (hand-off of responsibility).
+    leads = inv["leads"]
+    if inv["age"] < 10:
+        gets = True  # under 10 the caregiver is the user
+    elif inv["person"] == "patient":
+        gets = leads in ("shared", "patient")
+    else:
+        # A caregiver can only be asked about plans the patient shares with them.
+        gets = leads in ("parent", "shared") and sharing["plans"]
+    who["getsReminders"] = inv["age"] < 10 or (
+        leads in ("shared", "patient") if inv["person"] == "patient" else leads in ("parent", "shared")
+    )
+    who["getsCheckbacks"] = gets
     if owns_record(inv):
         # ownState: this person's own saved answers, so a new device can pick them up.
         return {"invite": who, "patient": derive(prow, c), "ownState": main}
@@ -640,8 +663,8 @@ def sync_tasks(c, pid, state):
             event(c, pid, "task_removed", f"Patient changed '{b}' to No; open task removed")
 
 
-def log_checkbacks(c, pid, old, new):
-    """Record each new patient check-back answer, so history is kept when a later one replaces it."""
+def log_checkbacks(c, pid, old, new, who="Patient"):
+    """Record each new check-back answer, so history is kept when a later one replaces it."""
     for k, v in new.items():
         if old.get(k) == v:
             continue
@@ -655,8 +678,8 @@ def log_checkbacks(c, pid, old, new):
             c,
             pid,
             "check_back",
-            f"Patient check-back for '{t['barrier']}': {CHECK_ANSWERS[v['answer']]}"
-            + (f' (patient wrote: "{note}")' if note.strip() else ""),
+            f"{who} check-back for '{t['barrier']}': {CHECK_ANSWERS[v['answer']]}"
+            + (f' ({who.lower()} wrote: "{note}")' if note.strip() else ""),
         )
 
 
@@ -705,6 +728,8 @@ def task_view(c, t, st):
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
         # The patient's latest check-back answer for this task, exactly as they wrote it.
         "patientAnswer": (st.get("checkbacks") or {}).get(str(t["id"])),
+        # The caregiver's own check-back answer (patient 10+, when they are asked), exactly as written.
+        "caregiverAnswer": ((caregiver_state(c, t["patient_id"]) or {}).get("checkbacks") or {}).get(str(t["id"])),
         "latestWeekly": (st.get("weekly") or [None])[-1],
         # Patient context shown next to the plan form (read-only).
         "strategies": st.get("strategies", []),
@@ -856,6 +881,10 @@ def recalc(c, row):
         if age >= CLINICIAN_HOURS
         else "caregiver_notice" if age >= CAREGIVER_HOURS else "none"
     )
+    # Patient leads: no caregiver notice; only the clinician review stage.
+    fam = c.execute("SELECT leads FROM families WHERE id=?", (pid,)).fetchone()
+    if fam and fam["leads"] == "patient" and target == "caregiver_notice":
+        target = "none"
     old = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
     if old and old["stage"] == "resolved":
         return
@@ -1126,6 +1155,23 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/families" and isinstance(data, dict):
             with LOCK, db() as c:
                 reply = self.enroll(c, data)
+            return self.json(*reply)
+        fm = re.fullmatch(r"/api/families/([A-Za-z0-9_-]+)/leads", path)
+        if fm and isinstance(data, dict):
+            with LOCK, db() as c:
+                f = c.execute("SELECT leads FROM families WHERE id=?", (fm.group(1),)).fetchone()
+                if not f:
+                    reply = ({"error": "Family not found"}, 404)
+                elif data.get("leads") not in LEADS_NAMES:
+                    reply = ({"error": "Who leads must be parent, shared or patient"}, 400)
+                else:
+                    new = data["leads"]
+                    if new != f["leads"]:
+                        c.execute("UPDATE families SET leads=? WHERE id=?", (new, fm.group(1)))
+                        event(c, fm.group(1), "who_leads", f"Who leads changed from {LEADS_NAMES[f['leads']]} to {LEADS_NAMES[new]} ({acting_role(data)})")
+                        row = c.execute("SELECT * FROM patients WHERE id=?", (fm.group(1),)).fetchone()
+                        recalc(c, row)
+                    reply = ({"family": family_info(c, fm.group(1))}, 200)
             return self.json(*reply)
         tm = re.fullmatch(r"/api/tasks/(\d+)/(plan|outcome)", path)
         if tm and isinstance(data, dict):

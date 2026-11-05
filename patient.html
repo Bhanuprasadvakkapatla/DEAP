@@ -945,6 +945,8 @@
         ws_cgPtNot: '{pt} does not see your checklist answers.',
         ws_under10: 'You are the main user for {pt}. You see everything about {pt} here.',
         ws_proposed: 'Proposed rules for this demo. Your care team decides the real rules.',
+        ws_remindYou: 'Reminders and “Is your plan working?” questions come to you.',
+        ws_remindOther: 'Right now, reminders and “Is your plan working?” questions go to {other}.',
         theirPlans: "{pt}'s plans",
         plansPrivate: "{pt}'s plans are private.",
         noPlanYet: 'The care team will make a plan with {pt}.',
@@ -1111,6 +1113,8 @@
         ws_cgPtNot: '{pt} no ve tus respuestas de la lista.',
         ws_under10: 'Eres quien usa la app por {pt}. Aquí ves todo sobre {pt}.',
         ws_proposed: 'Reglas propuestas para esta demostración. Tu equipo de cuidado decide las reglas reales.',
+        ws_remindYou: 'Los recordatorios y la pregunta “¿Te está funcionando tu plan?” te llegan a ti.',
+        ws_remindOther: 'Por ahora, los recordatorios y la pregunta “¿Te está funcionando tu plan?” le llegan a {other}.',
         theirPlans: 'Planes de {pt}',
         plansPrivate: 'Los planes de {pt} son privados.',
         noPlanYet: 'El equipo de cuidado hará un plan con {pt}.',
@@ -1280,8 +1284,8 @@
     const dueCheck = () => deapPlans.find(p => isDue(p) && (s.checkbacks || {})[p.taskId]?.for !== p.dueDate);
 
     function checkBackCard() {
-      // A caregiver of a patient 10+ is only asked when "Who leads" includes them (set by the server).
-      if (isCg10() && !deapInvite.getsCheckbacks) return '';
+      // With a personal link, "Who leads" decides who is asked (set by the server).
+      if (INVITE && deapInvite && !deapInvite.getsCheckbacks) return '';
       const p = dueCheck();
       if (!p) return '';
       if (checkDraft.taskId !== p.taskId) checkDraft = {
@@ -1348,6 +1352,11 @@
         toggles =
           `<label class="choice" style="font-size:13px"><span>${tf('ws_sharePlans',{cg})}</span><input id="sharePlans" type="checkbox" ${sh.plans?'checked':''}></label><label class="choice" style="font-size:13px"><span>${tf('ws_shareWeekly',{cg})}</span><input id="shareWeekly" type="checkbox" ${sh.weekly?'checked':''}></label>`
       }
+      // Hand-off: who gets reminders and check-back questions right now.
+      const other = i.person === 'patient' ? cg : pt;
+      lines.push(i.getsReminders ? t('ws_remindYou') : tf('ws_remindOther', {
+        other
+      }));
       return `<div class="card" id="whoSees"><h3>${t('ws_title')}</h3><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul>${toggles}<p class="small">${t('ws_proposed')}</p></div>`
     }
 
