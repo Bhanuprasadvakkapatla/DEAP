@@ -818,7 +818,7 @@
       const ch = p.chart;
       if (!ch) return '';
       const levels = ch.recentLevels.length ? `<table class="levels"><thead><tr><th>Draw date</th><th>Tacrolimus (ng/mL)</th></tr></thead><tbody>${ch.recentLevels.map(x=>`<tr><td>${esc(shortDate(x.date+'T12:00:00'))}</td><td>${esc(x.level)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No lab draws on record.</p>';
-      return `<div class="panel full" id="chartPanel"><h2>Chart signals <span class="pill">Demo — no real EHR</span></h2>${ch.hasData?`<div class="detail"><div><small class="muted">Last ${ch.recentLevels.length} level${ch.recentLevels.length===1?'':'s'}</small>${levels}<p class="muted" id="chartSpread">Spread (standard deviation) of last 4: ${ch.spread===null?'needs 4 draws':esc(ch.spread.toFixed(1))}</p></div><div class="list"><div class="item"><small>Last clinic visit</small><strong>${esc(ch.lastVisit?shortDate(ch.lastVisit+'T12:00:00'):'None on record')}</strong></div><div class="item"><small>Last lab</small><strong>${esc(ch.lastLab?shortDate(ch.lastLab+'T12:00:00'):'None on record')}</strong></div></div></div>`:'<p class="muted">No chart data for this patient.</p>'}<div class="list" id="chartFlags" style="margin-top:12px">${ch.flags.length?ch.flags.map(f=>`<div class="item chartflag">${esc(f.text)}</div>`).join(''):'<p class="muted">No chart flags.</p>'}</div>${p.chartMismatch?`<p class="mismatch" id="chartMismatch">${MISMATCH}</p>`:''}${ch.flags.length?'<p class="muted">For review at the weekly team meeting.</p>':''}</div>`
+      return `<div class="panel full" id="chartPanel"><h2>Chart signals <span class="pill">Demo — no real EHR</span></h2>${ch.hasData?`<div class="detail"><div><small class="muted">Last ${ch.recentLevels.length} level${ch.recentLevels.length===1?'':'s'}</small>${levels}<p class="muted" id="chartSpread">Spread (standard deviation) of last 4: ${ch.spread===null?'needs 4 draws':esc(ch.spread.toFixed(1))}</p></div><div class="list"><div class="item"><small>Last clinic visit</small><strong>${esc(ch.lastVisit?shortDate(ch.lastVisit+'T12:00:00'):'None on record')}</strong></div><div class="item"><small>Last lab</small><strong>${esc(ch.lastLab?shortDate(ch.lastLab+'T12:00:00'):'None on record')}</strong></div></div></div>`:'<p class="muted">No chart data for this patient.</p>'}<div class="list" id="chartFlags" style="margin-top:12px">${ch.flags.length?ch.flags.map(f=>`<div class="item chartflag">${esc(f.text)}</div>`).join(''):'<p class="muted">No chart flags.</p>'}</div>${p.chartMismatch?`<p class="mismatch" id="chartMismatch">${MISMATCH}</p>`:''}${ch.flags.length?'<p class="muted">For review at the weekly team meeting.</p>':''}<div class="democlock" id="labForm"><strong>Demo: add a lab result</strong><span class="pill">Demo — no real EHR</span><label class="muted" for="labDate">Date</label><input type="date" id="labDate" value="${new Date().toLocaleDateString('en-CA')}"><label class="muted" for="labLevel">Tacrolimus (ng/mL)</label><input type="number" id="labLevel" step="0.1" min="0" style="width:110px"><button class="button small secondary" id="addLab">Add lab result</button><span id="labResult" class="muted" role="status"></span></div></div>`
     }
 
     function planSummary(pl) {
@@ -1042,6 +1042,34 @@
         planFormFor = Number(makePlan.dataset.makePlan || makePlan.dataset.adjust);
         render();
         el('plan_who')?.focus();
+        return
+      }
+      if (e.target.id === 'addLab' && selected) {
+        const b = e.target;
+        const level = parseFloat(el('labLevel').value);
+        if (!el('labDate').value || Number.isNaN(level)) {
+          el('labResult').textContent = 'Please enter a date and a level.';
+          return
+        }
+        b.disabled = true;
+        try {
+          const r = await fetch('/api/patients/' + encodeURIComponent(selected) + '/labs', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              date: el('labDate').value,
+              level
+            })
+          });
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to add');
+          await refresh();
+          render()
+        } catch (err) {
+          b.disabled = false;
+          if (el('labResult')) el('labResult').textContent = 'Could not add: ' + err.message
+        }
         return
       }
       if (e.target.id === 'jumpClock' && selected) {

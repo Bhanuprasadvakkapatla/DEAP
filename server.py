@@ -780,7 +780,7 @@ class Handler(SimpleHTTPRequestHandler):
     def route(self):
         path = unquote(urlparse(self.path).path)
         m = re.fullmatch(
-            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock))?",
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs))?",
             path,
         )
         return path, m
@@ -1019,6 +1019,23 @@ class Handler(SimpleHTTPRequestHandler):
                 "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
             )
             event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
+        elif action == "labs":
+            # Demo only (no real EHR): add a fictional lab result so a chart flag can appear live.
+            try:
+                drawn = date.fromisoformat(str(data.get("date", "")))
+            except ValueError:
+                return {"error": "Date must be YYYY-MM-DD"}, 400
+            level = data.get("level")
+            if type(level) not in (int, float) or not 0 < level < 100:
+                return {"error": "Level must be a number above 0 and below 100"}, 400
+            # Allow one day ahead of the server's date for time-zone differences.
+            if drawn > NOW().date() + timedelta(days=1):
+                return {"error": "Date cannot be in the future"}, 400
+            c.execute(
+                "INSERT INTO labs(patient_id,drawn_on,tacrolimus,source) VALUES (?,?,?,'demo form')",
+                (pid, drawn.isoformat(), float(level)),
+            )
+            event(c, pid, "simulation", f"Demo only: lab result added ({drawn.isoformat()}, {float(level)} ng/mL)")
         elif action == "plan-clock":
             # Demo only: move this patient's check-back clock forward. Real time is unchanged.
             days = data.get("days")

@@ -75,7 +75,7 @@ Packet must-keep #6: use risk signals already in the chart. All chart data here 
 - **No clinic visit in over 4 months** (calendar months; `DEAP_VISIT_MONTHS`, default `4`).
 - **No labs in over 6 weeks** (`DEAP_LAB_DAYS`, default `42`).
 
-No target range is shown and levels are never called high or low; we were not given those.
+No target range is shown and levels are never called high or low; we were not given those. Chart flags appear only for the care team (patient detail "Chart signals" and the worklist group "Chart flags — for team review", next action "Review at weekly team meeting"); a flag raises the patient's status to at least yellow. The patient and caregiver app never receives chart data. **Demo: add a lab result** (patient detail, labelled "Demo — no real EHR") adds a fictional result so a flag can appear live.
 
 ### API
 
@@ -85,6 +85,7 @@ No target range is shown and levels are never called high or low; we were not gi
 - `PUT /api/patients/{id}` JSON `{ "state": {...} }`
 - `POST /api/patients/{id}/care-plan` JSON `{ "carePlan": "..." }`
 - `GET /api/tasks` — follow-up tasks (one per "yes" barrier per assessment) with current plan, plan history and patient check-back answer, plus the list of owner roles
+- `POST /api/patients/{id}/labs` JSON `{ "date": "YYYY-MM-DD", "level": 7.2 }` — demo only: add a fictional tacrolimus result
 - `POST /api/tasks/{id}/plan` JSON `{ "who", "what", "how", "where", "when", "patientText" }` — agree a plan
 - `POST /api/tasks/{id}/outcome` JSON `{ "outcome": "working" | "not_working" | "adjust" }` (adjust also takes the plan fields)
 - `POST /api/patients/{id}/requests` JSON `{ "action": "handled" }` — clinician marks open support requests handled (stored on the server, outside the patient's state)
