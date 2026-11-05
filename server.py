@@ -124,6 +124,11 @@ def init():
             c.execute(
                 "ALTER TABLE patients ADD COLUMN handled_requests INTEGER NOT NULL DEFAULT 0"
             )
+        # Demo-only: days this patient's check-back clock is moved forward. Real time is unchanged.
+        if "plan_clock_days" not in cols:
+            c.execute(
+                "ALTER TABLE patients ADD COLUMN plan_clock_days INTEGER NOT NULL DEFAULT 0"
+            )
         # Clinician-owned follow-up tasks: one per "yes" barrier per assessment.
         # due_date is the next check-back. The plan text lives in the plans table.
         c.execute(
@@ -280,6 +285,12 @@ def plan_view(p):
     }
 
 
+def clock_days(c, pid):
+    """Demo-only days added to this patient's check-back clock."""
+    r = c.execute("SELECT plan_clock_days FROM patients WHERE id=?", (pid,)).fetchone()
+    return r["plan_clock_days"] if r else 0
+
+
 def task_view(c, t, st):
     """One task as the clinician sees it: the current plan, plan history and patient context."""
     plans = c.execute(
@@ -296,6 +307,7 @@ def task_view(c, t, st):
         "status": t["status"],
         "createdAt": t["created_at"],
         "dueDate": t["due_date"],
+        "clockOffsetDays": clock_days(c, t["patient_id"]),
         "isPrimary": st.get("primary") == t["barrier"],
         "plan": plan_view(current) if current else None,
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
@@ -400,6 +412,7 @@ def derive(row, c):
         ),
         carePlan=row["care_plan"],
         plans=patient_plans(c, pid, state),
+        clockOffsetDays=row["plan_clock_days"],
         barrierOwners={
             b: BARRIER_OWNERS[b] for b in state.get("barriers", []) if b in BARRIER_OWNERS
         },
@@ -578,7 +591,7 @@ class Handler(SimpleHTTPRequestHandler):
     def route(self):
         path = unquote(urlparse(self.path).path)
         m = re.fullmatch(
-            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests))?",
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock))?",
             path,
         )
         return path, m
@@ -714,7 +727,9 @@ class Handler(SimpleHTTPRequestHandler):
             return {"error": "Task not found"}, 404
         pid = t["patient_id"]
         by = acting_role(data)
+        # Audit times use real time; due dates count from the patient's (demo) clock.
         now = NOW()
+        clock_now = now + timedelta(days=clock_days(c, pid))
         if action == "plan":
             # One plan per barrier: a new plan only when the task has none.
             if t["status"] != "needs_plan":
@@ -726,7 +741,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "INSERT INTO plans(task_id,who,what,how,where_text,when_text,patient_text,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?)",
                 (task_id, fields["who"], fields["what"], fields["how"], fields["where"], fields["when"], fields["patientText"], iso(now), by),
             )
-            due = now + timedelta(days=CHECK_BACK_DAYS)
+            due = clock_now + timedelta(days=CHECK_BACK_DAYS)
             c.execute(
                 "UPDATE tasks SET status='plan_agreed', due_date=? WHERE id=?",
                 (iso(due), task_id),
@@ -749,7 +764,7 @@ class Handler(SimpleHTTPRequestHandler):
             b = t["barrier"]
             if outcome == "working":
                 # Durability phase: keep the plan, check again later.
-                due = now + timedelta(days=DURABILITY_DAYS)
+                due = clock_now + timedelta(days=DURABILITY_DAYS)
                 c.execute(
                     "UPDATE tasks SET status='keep_checking', due_date=? WHERE id=?",
                     (iso(due), task_id),
@@ -779,7 +794,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "INSERT INTO plans(task_id,who,what,how,where_text,when_text,patient_text,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?)",
                     (task_id, fields["who"], fields["what"], fields["how"], fields["where"], fields["when"], fields["patientText"], iso(now), by),
                 )
-                due = now + timedelta(days=CHECK_BACK_DAYS)
+                due = clock_now + timedelta(days=CHECK_BACK_DAYS)
                 c.execute(
                     "UPDATE tasks SET status='plan_agreed', due_date=? WHERE id=?",
                     (iso(due), task_id),
@@ -814,6 +829,18 @@ class Handler(SimpleHTTPRequestHandler):
                 "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
             )
             event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
+        elif action == "plan-clock":
+            # Demo only: move this patient's check-back clock forward. Real time is unchanged.
+            days = data.get("days")
+            if type(days) != int or days != CHECK_BACK_DAYS:
+                return {"error": f"Demo jump must be {CHECK_BACK_DAYS} days"}, 400
+            if row["plan_clock_days"] + days > 3650:
+                return {"error": "Demo clock is already far ahead; use --reset"}, 400
+            c.execute(
+                "UPDATE patients SET plan_clock_days=plan_clock_days+? WHERE id=?",
+                (days, pid),
+            )
+            event(c, pid, "simulation", f"Demo only: check-back clock moved forward {days} days")
         elif action == "requests":
             if data.get("action") != "handled":
                 return {"error": "Invalid action"}, 400

@@ -1421,6 +1421,7 @@
           deapLastSent = null;
           deapPlans = [];
           deapPlansKey = '[]';
+          deapClockDays = 0;
           return go('sms')
         }
       }
@@ -1590,17 +1591,18 @@
           const el = document.getElementById('deapCarePlan');
           if (el) el.textContent = cp || deapNoNote();
         }
-        deapUpdatePlans(data.patient?.plans || []);
+        deapUpdatePlans(data.patient?.plans || [], data.patient?.clockOffsetDays || 0);
       } catch (e) {
         deapStatus(false)
       }
     }
 
     // Show new or changed plans; wait while the patient is typing so nothing they type is lost.
-    function deapUpdatePlans(plans) {
-      const key = JSON.stringify(plans);
+    function deapUpdatePlans(plans, clockDays) {
+      const key = JSON.stringify([plans, clockDays]);
       if (key !== deapPlansKey) {
         deapPlans = plans;
+        deapClockDays = clockDays;
         deapPlansKey = key;
         deapRenderPending = true
       }
