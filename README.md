@@ -83,6 +83,8 @@ The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link o
 
 New Spanish text for families (who sees what, sharing, hand-off) is a draft translation for the clinical team to review.
 
+**Demo families** (fictional, based on the packet personas; their links are in each patient's detail): **Maya R., 15, Shared**: Maya and her mom Laura both answered; they differ on one item. **Jordan P., 20, Patient leads**: own words about the hand-off from Mom; Mom (Denise) has a link but has not answered. **Leo S., 8, Parent leads, Spanish**: his mom Ana is the user (caregiver link only).
+
 ### Chart risk signals (demo — no real EHR)
 
 Packet must-keep #6: use risk signals already in the chart. All chart data here is fictional and stored in server tables (`chart_visits`, `labs`), never in the patient's state. Three flags, computed on the server:

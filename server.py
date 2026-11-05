@@ -239,6 +239,7 @@ def init():
                         0,
                     ),
                 )
+            seed_families(c)
         # Create tasks for seed patients and for databases made before the tasks table existed.
         for row in c.execute("SELECT id, state FROM patients").fetchall():
             sync_tasks(c, row["id"], json.loads(row["state"]))
@@ -416,6 +417,59 @@ def family_sharing(main, leads):
         "plans": sp if isinstance(sp, bool) else leads != "patient",
         "weekly": sw if isinstance(sw, bool) else False,
     }
+
+
+# Fictional families based on the packet personas (packet pages 2 and 4).
+# (first, last initial, age, language, caregiver, who leads, patient's own answers, caregiver's own answers)
+SEED_FAMILIES = [
+    ("Maya", "R", 15, "en", "Laura", "shared",
+     {"yes": ["forget", "embarrass", "other"], "other": "I forget on weekends and at sleepovers", "weekly": "green"},
+     {"yes": ["forget"], "weekly": "green"}),
+    ("Jordan", "P", 20, "en", "Denise", "patient",
+     {"yes": ["ranout", "afford", "other"], "other": "Mom used to handle refills and insurance", "weekly": "yellow"},
+     None),  # caregiver link exists; Mom has not answered
+    ("Leo", "S", 8, "es", "Ana", "parent",
+     None,  # under 10: no patient link
+     {"yes": ["taste", "swallow"], "weekly": "green"}),
+]
+
+
+def seed_answers(first, initial, caregiver, lang, role, a):
+    yes = a["yes"]
+    st = {
+        "patientName": first,
+        "patientLastInitial": initial,
+        "caregiverName": caregiver,
+        "role": role,
+        "lang": lang,
+        "view": "today",
+        "step": 4,
+        "barriers": [k for k in BARRIER_KEYS if k in yes],
+        "primary": yes[0],
+        "batAnswers": {**{k: "yes" if k in yes else "no" for k in BAT_KEYS}, **({"other": "yes"} if "other" in yes else {})},
+        "batId": iso(NOW() - timedelta(days=4)),
+        "other": a.get("other", ""),
+        "strategies": [],
+        "daily": [{"date": (NOW() - timedelta(days=j)).date().isoformat(), "status": "reported_taken"} for j in range(1, 3)],
+        "weekly": [{"date": iso(NOW() - timedelta(days=2)), "status": a["weekly"], "note": ""}],
+        "contactRequests": 0,
+    }
+    return st
+
+
+def seed_families(c):
+    for first, initial, age, lang, cg, leads, pt, cga in SEED_FAMILIES:
+        fid = create_family(c, first, initial, age, lang, cg, leads)
+        if age < 10:
+            # The caregiver is the user: their answers are the child's record.
+            c.execute("UPDATE patients SET state=? WHERE id=?", (json.dumps(seed_answers(first, initial, cg, lang, "caregiver", cga)), fid))
+            continue
+        c.execute("UPDATE patients SET state=? WHERE id=?", (json.dumps(seed_answers(first, initial, cg, lang, "self", pt)), fid))
+        if cga:
+            c.execute(
+                "INSERT INTO caregiver_states(family_id,state,updated_at) VALUES (?,?,?)",
+                (fid, json.dumps(seed_answers(first, initial, cg, lang, "caregiver", cga)), iso()),
+            )
 
 
 def family_info(c, pid):
