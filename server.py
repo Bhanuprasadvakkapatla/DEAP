@@ -140,7 +140,8 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, who TEXT NOT NULL, what TEXT NOT NULL, how TEXT NOT NULL, where_text TEXT NOT NULL, when_text TEXT NOT NULL, patient_text TEXT NOT NULL, created_at TEXT NOT NULL, created_by TEXT NOT NULL, closed_at TEXT, outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id))"
         )
-        if c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0:
+        fresh_seed = c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0
+        if fresh_seed:
             # Fictional demo patients: (name, BAT "yes" barriers with the biggest first, weekly status)
             sample = [
                 ("Alex", ["toomany"], "yellow"),
@@ -209,6 +210,78 @@ def init():
         # Create tasks for seed patients and for databases made before the tasks table existed.
         for row in c.execute("SELECT id, state FROM patients").fetchall():
             sync_tasks(c, row["id"], json.loads(row["state"]))
+        if fresh_seed:
+            seed_plans(c)
+
+
+# Fictional demo plans so the seed patients show every stage of the follow-up loop.
+# Each: (patient, barrier, days since plan agreed, status, check-back in days, plan).
+SEED_PLANS = [
+    ("demo-02", "forget", 5, "plan_agreed", 9, {
+        "who": "Jordan; a parent is the backup", "what": "Phone or app reminders",
+        "how": "Alarm on Jordan's phone labelled 'meds'", "where": "Kitchen, with breakfast",
+        "when": "Every morning at 7:00",
+        "patientText": "My phone alarm says 'meds' at 7. I take them with breakfast."}),
+    ("demo-10", "activities", 3, "plan_agreed", 11, {
+        "who": "Cameron, with the psychologist", "what": "Keep medicine with sports gear",
+        "how": "A small pouch that stays in the sports bag", "where": "Sports bag",
+        "when": "Packed the night before practice",
+        "patientText": "My medicine pouch lives in my sports bag, so it comes to practice with me."}),
+    ("demo-04", "swallow", 14, "plan_agreed", 0, {
+        "who": "Sam, with the transplant coordinator", "what": "Practice swallowing with small candy",
+        "how": "Start with tiny candies, then slightly bigger ones", "where": "At home",
+        "when": "5 minutes after dinner",
+        "patientText": "I practice with small candies for 5 minutes after dinner."}),
+    ("demo-11", "confusing", 14, "plan_agreed", 0, {
+        "who": "Drew, with the pharmacist", "what": "Go over the medicine instructions together",
+        "how": "Pharmacist makes a simple chart of each medicine", "where": "Clinic visit",
+        "when": "At the next clinic visit",
+        "patientText": "My pharmacist made me a simple chart of my medicines. I keep it on my desk."}),
+    ("demo-08", "taste", 14, "plan_agreed", 0, {
+        "who": "Avery, with the transplant coordinator", "what": "Numb taste buds with a popsicle first",
+        "how": "Keep popsicles in the freezer", "where": "At home", "when": "Right before each dose",
+        "patientText": "I eat a popsicle right before my medicine."}),
+    ("demo-07", "ranout", 17, "plan_agreed", -3, {
+        "who": "Casey, with the social worker", "what": "Refill reminders from the pharmacy",
+        "how": "Social worker helps sign up for pharmacy refill texts", "where": "By phone",
+        "when": "This week",
+        "patientText": "The pharmacy will text me when it is time to refill."}),
+    ("demo-06", "embarrass", 20, "keep_checking", 24, {
+        "who": "Morgan, with the transplant coordinator", "what": "Carry and take medicine discreetly",
+        "how": "A small pill case in the backpack", "where": "School", "when": "At lunch",
+        "patientText": "I keep a small pill case in my backpack and take it quietly at lunch."}),
+]
+
+
+def seed_plans(c):
+    now = NOW()
+    for pid, barrier, ago, status, due_in, f in SEED_PLANS:
+        t = c.execute(
+            "SELECT id, owner_role FROM tasks WHERE patient_id=? AND barrier=?", (pid, barrier)
+        ).fetchone()
+        c.execute(
+            "INSERT INTO plans(task_id,who,what,how,where_text,when_text,patient_text,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+            (t["id"], f["who"], f["what"], f["how"], f["where"], f["when"], f["patientText"],
+             iso(now - timedelta(days=ago)), t["owner_role"] + " (demo, no login)"),
+        )
+        c.execute(
+            "UPDATE tasks SET status=?, due_date=? WHERE id=?",
+            (status, iso(now + timedelta(days=due_in)), t["id"]),
+        )
+        event(c, pid, "plan_agreed", f"Demo seed: plan for '{barrier}' ({status.replace('_', ' ')})")
+    # Avery answered the check-back "Not really". Patient-owned, so it lives in her own state.
+    t = c.execute("SELECT id, due_date FROM tasks WHERE patient_id='demo-08' AND barrier='taste'").fetchone()
+    row = c.execute("SELECT state FROM patients WHERE id='demo-08'").fetchone()
+    st = json.loads(row["state"])
+    st["checkbacks"] = {
+        str(t["id"]): {
+            "answer": "not_really",
+            "note": "The popsicle helps a little, but I can still taste it after.",
+            "at": iso(now - timedelta(hours=3)),
+            "for": t["due_date"],
+        }
+    }
+    c.execute("UPDATE patients SET state=? WHERE id='demo-08'", (json.dumps(st),))
 
 
 def event(c, pid, kind, message):
