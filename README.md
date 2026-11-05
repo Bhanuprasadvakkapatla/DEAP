@@ -6,10 +6,13 @@
 
 Requires Python 3.9+; no external packages or internet connection.
 
+From the project folder:
+
 ```bash
-cd DEAP_Connect_FullStack
-python3 server.py
+python server.py
 ```
+
+On Mac/Linux you may need `python3 server.py` instead.
 
 Open both views in the same browser or different browsers on the same computer:
 
@@ -18,10 +21,35 @@ Open both views in the same browser or different browsers on the same computer:
 
 Do **not** open `patient.html` by double-clicking it (`file://`): the shared backend requires the server.
 
+### Fresh demo data: `--reset`
+
+The 12 demo patients are created with recent check-in times, so after about a day they turn yellow and after about two days red. To start over with fresh times:
+
+```bash
+python server.py --reset
+```
+
+This deletes the demo database (`deap_demo.sqlite3`, or the file named in `DEAP_DB`) and re-creates it with 12 fresh demo patients, then starts the server. It prints a message when it does. All patients added during earlier demos are removed.
+
+### Open the patient app on a phone: `DEAP_HOST`
+
+By default the server only accepts connections from this computer (`127.0.0.1`). To let a phone on the **same Wi-Fi** open it, set `DEAP_HOST` to `0.0.0.0`:
+
+```powershell
+# Windows PowerShell
+$env:DEAP_HOST="0.0.0.0"; python server.py
+```
+
+```bash
+# Mac/Linux
+DEAP_HOST=0.0.0.0 python3 server.py
+```
+
+On start, the server prints the address to open on the phone, for example `http://192.168.1.20:8000/patient.html`. Windows may ask once whether to allow Python through the firewall; allow it for private networks. There is no login, so anyone on the same network can open the demo: use fictional data only, and leave `DEAP_HOST` unset when you do not need phone access.
+
 ## Architecture
 
-- `patient_v1_locked.html` — untouched, locked snapshot of personalized patient/caregiver v1.0.
-- `patient.html` — identical core UX with an additive backend synchronization adapter and read-only care-team note.
+- `patient.html` — patient/caregiver app with backend synchronization and a read-only care-team note.
 - `clinician.html` — clinician roster, attention queue, patient details, reporting, and care-team follow-up notes.
 - `server.py` — Python standard-library HTTP server + JSON API + SQLite database.
 - `deap_demo.sqlite3` — automatically created local database with 12 fictional patient records.
@@ -35,6 +63,7 @@ Patient data is saved to the browser's localStorage and synchronized to the SQLi
 - `GET /api/patients/{id}`
 - `PUT /api/patients/{id}` JSON `{ "state": {...} }`
 - `POST /api/patients/{id}/care-plan` JSON `{ "carePlan": "..." }`
+- `POST /api/patients/{id}/requests` JSON `{ "action": "handled" }` — clinician marks open support requests handled (stored on the server, outside the patient's state)
 
 ### Demonstrate
 
@@ -46,13 +75,13 @@ Patient data is saved to the browser's localStorage and synchronized to the SQLi
 
 ### Safety and limitations
 
-No authentication, authorization, transport security, auditing, HIPAA compliance, real SMS, EHR integration, or verified clinical assessment content. Do not deploy publicly or use real patient data. Barrier labels are demo placeholders, not the validated MAPS instrument. Status rules are illustrative workflow rules, not clinical risk scores. Clinician notes are demo messages, not medical instructions. Reset demo data by stopping the server and deleting `deap_demo.sqlite3`.
+No authentication, authorization, transport security, auditing, HIPAA compliance, real SMS, EHR integration, or verified clinical assessment content. Do not deploy publicly or use real patient data. Barrier labels are demo placeholders, not the validated MAPS instrument. Status rules are illustrative workflow rules, not clinical risk scores. Clinician notes are demo messages, not medical instructions. Reset demo data by stopping the server and running `python server.py --reset`.
 
 ## Overdue Check-in & Escalation — engagement safety net (new)
 
 This is a **simulation of non-response**, not an unconsciousness detector, missed-dose detector, or emergency monitoring system. The system does not know whether medication was taken. An unconscious/unresponsive person needs emergency services (911 in the US), not a response from this application.
 
-- **24 hours** after last recorded check-in activity: a *simulated* caregiver notification appears in the connected patient view and clinician record. **No SMS or push is sent.**
+- **24 hours** after last recorded check-in activity: a *simulated* caregiver notification appears in the clinician record. **No SMS or push is sent.**
 - **48 hours**: the patient is flagged for clinician review in the attention queue. **No external clinician alert is sent.**
 - Clinicians can **acknowledge** the flag, **mark it resolved**, and review a basic **event history**.
 - Patient check-in activity resets the non-response stage. A passive page visit does not count as a check-in.
@@ -65,4 +94,4 @@ This is a **simulation of non-response**, not an unconsciousness detector, misse
 - `POST /api/patients/{id}/escalation` with `{"action":"acknowledge"|"resolve"}`
 - `GET /api/patients/{id}/escalation` returns demo audit events
 
-Run locally only (`127.0.0.1:8000`). The local SQLite file is generated on first run and should not be committed to Git.
+Runs locally only (`127.0.0.1:8000`) unless you set `DEAP_HOST=0.0.0.0` for phone testing on the same network. The local SQLite file is generated on first run and should not be committed to Git.
