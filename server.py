@@ -397,8 +397,11 @@ def derive(row, c):
     rank = {"blue": 0, "green": 1, "yellow": 2, "red": 3}
     if overdue and rank[overdue] > rank[status]:
         status = overdue
-    return dict(
+    # Start from the patient's state, then let server-owned fields overwrite any key with
+    # the same name (a patient state can never fake or break these).
+    return {
         **state,
+        **dict(
         id=pid,
         attentionReasons=reasons,
         elapsedHours=max(
@@ -427,7 +430,8 @@ def derive(row, c):
         },
         lastEngagement=row["last_engagement"],
         demoOffsetHours=row["demo_offset_hours"],
-    )
+        ),
+    }
 
 
 def recalc(c, row):
