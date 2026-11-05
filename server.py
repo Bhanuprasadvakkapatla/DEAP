@@ -139,18 +139,12 @@ def init():
                 ("Drew", ["confusing", "notwork"], "green"),
                 ("Parker", ["noneed"], "yellow"),
             ]
-            # Ideas the demo patients picked (same wording as patient.html). Barriers that only
-            # get a care-team message have no ideas.
+            # Ideas the demo patients ticked. Barriers that only get a care-team message have none.
             seed_ideas = {
-                "forget": [
-                    ("reminder", "Phone or app reminders"),
-                    ("routine", "Pair doses with a daily routine, like brushing teeth"),
-                ],
-                "taste": [("taste_flavoring", "Ask the pharmacist about flavoring")],
-                "swallow": [("swallow_candy", "Practice swallowing with small candy")],
-                "embarrass": [
-                    ("embarrass_discreet", "Carry and take your medicine discreetly")
-                ],
+                "forget": ["reminder", "routine"],
+                "taste": ["taste_flavoring"],
+                "swallow": ["swallow_candy"],
+                "embarrass": ["embarrass_discreet"],
             }
             for i, (name, yes, status) in enumerate(sample):
                 barrier = yes[0]
@@ -166,9 +160,7 @@ def init():
                     "barriers": [k for k in BARRIER_KEYS if k in yes],
                     "batAnswers": {k: "yes" if k in yes else "no" for k in BAT_KEYS},
                     "batId": iso(NOW() - timedelta(days=3)),
-                    "strategies": [k for k, _ in seed_ideas.get(barrier, [])],
-                    "plan": " + ".join(text for _, text in seed_ideas.get(barrier, []))
-                    or "Talk with your care team to make a plan that fits your day.",
+                    "strategies": list(seed_ideas.get(barrier, [])),
                     "daily": [
                         {
                             "date": (NOW() - timedelta(days=j)).date().isoformat(),
@@ -282,6 +274,26 @@ def task_view(c, t, st):
     }
 
 
+def patient_plans(c, pid, state):
+    """Agreed plans the patient sees, in their own words; the biggest-problem one first."""
+    rows = c.execute(
+        "SELECT t.id, t.barrier, t.status, t.due_date, p.patient_text FROM tasks t JOIN plans p ON p.task_id = t.id AND p.closed_at IS NULL WHERE t.patient_id=? AND t.status IN ('plan_agreed','keep_checking') ORDER BY t.id",
+        (pid,),
+    ).fetchall()
+    plans = [
+        {
+            "taskId": r["id"],
+            "barrier": r["barrier"],
+            "status": r["status"],
+            "dueDate": r["due_date"],
+            "patientText": r["patient_text"],
+            "isPrimary": r["barrier"] == state.get("primary"),
+        }
+        for r in rows
+    ]
+    return sorted(plans, key=lambda p: not p["isPrimary"])
+
+
 def clean_plan(data):
     """Validate the five plan parts and the patient's version. Returns (fields, error)."""
     fields = {}
@@ -352,6 +364,7 @@ def derive(row, c):
             + row["demo_offset_hours"],
         ),
         carePlan=row["care_plan"],
+        plans=patient_plans(c, pid, state),
         barrierOwners={
             b: BARRIER_OWNERS[b] for b in state.get("barriers", []) if b in BARRIER_OWNERS
         },
