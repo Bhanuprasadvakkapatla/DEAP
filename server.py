@@ -242,8 +242,10 @@ def init():
             seed_chart(c)
         # Families and personal links. Clinician-owned; separate from every person's state.
         c.execute(
-            "CREATE TABLE IF NOT EXISTS families (id TEXT PRIMARY KEY, age INTEGER NOT NULL, leads TEXT NOT NULL, caregiver_name TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(id) REFERENCES patients(id))"
+            "CREATE TABLE IF NOT EXISTS families (id TEXT PRIMARY KEY, age INTEGER NOT NULL, leads TEXT NOT NULL, caregiver_name TEXT NOT NULL, created_at TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'en', FOREIGN KEY(id) REFERENCES patients(id))"
         )
+        if "lang" not in [r["name"] for r in c.execute("PRAGMA table_info(families)")]:
+            c.execute("ALTER TABLE families ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'")
         c.execute(
             "CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, family_id TEXT NOT NULL, person TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
         )
@@ -275,8 +277,8 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
         (fid, json.dumps(state), "", iso(), iso()),
     )
     c.execute(
-        "INSERT INTO families(id,age,leads,caregiver_name,created_at) VALUES (?,?,?,?,?)",
-        (fid, age, leads or default_leads(age), caregiver, iso()),
+        "INSERT INTO families(id,age,leads,caregiver_name,created_at,lang) VALUES (?,?,?,?,?,?)",
+        (fid, age, leads or default_leads(age), caregiver, iso(), lang),
     )
     for person in (["caregiver"] if age < 10 else ["patient", "caregiver"]):
         c.execute(
@@ -285,6 +287,82 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
         )
     event(c, fid, "enrolled", f"Family enrolled (age {age}, {LEADS_NAMES[leads or default_leads(age)]}); personal links created")
     return fid
+
+
+def is_family(c, pid):
+    return c.execute("SELECT 1 FROM families WHERE id=?", (pid,)).fetchone() is not None
+
+
+def record_activity(c, pid):
+    """New check-in activity ends any non-response episode."""
+    er = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
+    if er and er["stage"] != "none":
+        c.execute(
+            "UPDATE escalation SET stage='none',acknowledged=0,note='New patient activity recorded',updated_at=? WHERE patient_id=?",
+            (iso(), pid),
+        )
+        event(c, pid, "activity", "Patient activity ended the previous non-response episode")
+
+
+def save_main_state(c, pid, state):
+    """Save the state of the person who owns this patient record. Returns the row."""
+    existing = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    old = json.loads(existing["state"]) if existing else {}
+    activity = not existing or any(
+        state.get(k) != old.get(k) for k in ("daily", "weekly", "contactRequests", "checkbacks")
+    )
+    when = iso() if activity else existing["last_engagement"]
+    c.execute(
+        "INSERT INTO patients(id,state,care_plan,updated_at,last_engagement,demo_offset_hours) VALUES (?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,last_engagement=excluded.last_engagement,demo_offset_hours=CASE WHEN ? THEN 0 ELSE patients.demo_offset_hours END",
+        (pid, json.dumps(state), "", iso(), when, int(activity)),
+    )
+    if activity:
+        record_activity(c, pid)
+    if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers", "batId")):
+        sync_tasks(c, pid, state)
+    log_checkbacks(c, pid, old.get("checkbacks") or {}, state.get("checkbacks") or {})
+    row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    recalc(c, row)
+    return row
+
+
+def save_caregiver_state(c, fid, state):
+    """Save the caregiver's own state (patient aged 10+). Never touches the patient's state."""
+    c.execute(
+        "INSERT INTO caregiver_states(family_id,state,updated_at) VALUES (?,?,?) ON CONFLICT(family_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at",
+        (fid, json.dumps(state), iso()),
+    )
+
+
+def invite_row(c, token):
+    return c.execute(
+        "SELECT i.person, i.family_id, f.age, f.leads, f.caregiver_name, f.lang FROM invites i JOIN families f ON f.id=i.family_id WHERE i.token=?",
+        (token,),
+    ).fetchone()
+
+
+def owns_record(inv):
+    """The patient (10+) or the caregiver of a child under 10 owns the family's patient record."""
+    return inv["person"] == "patient" or inv["age"] < 10
+
+
+def invite_view(c, inv):
+    """What one person's link may receive. The server decides; the page cannot ask for more."""
+    prow = c.execute("SELECT * FROM patients WHERE id=?", (inv["family_id"],)).fetchone()
+    main = json.loads(prow["state"])
+    who = {
+        "person": inv["person"],
+        "patientName": main.get("patientName", ""),
+        "patientLastInitial": main.get("patientLastInitial", ""),
+        "caregiverName": inv["caregiver_name"],
+        "age": inv["age"],
+        "lang": inv["lang"],
+        "leads": inv["leads"],
+    }
+    if owns_record(inv):
+        return {"invite": who, "patient": derive(prow, c)}
+    # Caregiver of a patient aged 10+: nothing from the patient's record yet.
+    return {"invite": who, "patient": {"plans": [], "carePlan": "", "clockOffsetDays": 0}}
 
 
 def family_info(c, pid):
@@ -862,6 +940,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json(
                 {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False}
             )
+        im = re.fullmatch(r"/api/invite/([A-Za-z0-9_-]{8,64})", path)
+        if im:
+            with LOCK, db() as c:
+                inv = invite_row(c, im.group(1))
+                reply = (invite_view(c, inv), 200) if inv else ({"error": "This link is not valid"}, 404)
+            return self.json(*reply)
         if path == "/api/tasks":
             with LOCK, db() as c:
                 rows = c.execute(
@@ -900,6 +984,8 @@ class Handler(SimpleHTTPRequestHandler):
         row = c.execute("SELECT * FROM patients WHERE id=?", (m.group(1),)).fetchone()
         if not row:
             return {"error": "Not found"}, 404
+        if is_family(c, row["id"]):
+            return {"error": "Use your personal link"}, 403
         recalc(c, row)
         return {"patient": derive(row, c)}, 200
 
@@ -914,6 +1000,26 @@ class Handler(SimpleHTTPRequestHandler):
     def do_PUT(self):
         path, m = self.route()
         data = self.body()
+        im = re.fullmatch(r"/api/invite/([A-Za-z0-9_-]{8,64})", path)
+        if im:
+            # One person's link: their state goes to their own record only.
+            if not isinstance(data, dict) or not isinstance(data.get("state"), dict):
+                return self.json({"error": "Invalid request"}, 400)
+            state = data["state"]
+            error = validate_state(state)
+            if error or len(json.dumps(state)) > 80000:
+                return self.json({"error": error or "Too large"}, 400)
+            with LOCK, db() as c:
+                inv = invite_row(c, im.group(1))
+                if not inv:
+                    reply = ({"error": "This link is not valid"}, 404)
+                else:
+                    if owns_record(inv):
+                        save_main_state(c, inv["family_id"], state)
+                    else:
+                        save_caregiver_state(c, inv["family_id"], state)
+                    reply = (invite_view(c, inv), 200)
+            return self.json(*reply)
         if (
             not m
             or m.group(2)
@@ -929,37 +1035,10 @@ class Handler(SimpleHTTPRequestHandler):
         if len(json.dumps(state)) > 80000:
             return self.json({"error": "Too large"}, 413)
         with LOCK, db() as c:
-            existing = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-            old = json.loads(existing["state"]) if existing else {}
-            activity = not existing or any(
-                state.get(k) != old.get(k)
-                for k in ("daily", "weekly", "contactRequests", "checkbacks")
-            )
-            when = iso() if activity else existing["last_engagement"]
-            c.execute(
-                "INSERT INTO patients(id,state,care_plan,updated_at,last_engagement,demo_offset_hours) VALUES (?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,last_engagement=excluded.last_engagement,demo_offset_hours=CASE WHEN ? THEN 0 ELSE patients.demo_offset_hours END",
-                (pid, json.dumps(state), "", iso(), when, int(activity)),
-            )
-            if activity:
-                er = c.execute(
-                    "SELECT * FROM escalation WHERE patient_id=?", (pid,)
-                ).fetchone()
-                if er and er["stage"] != "none":
-                    c.execute(
-                        "UPDATE escalation SET stage='none',acknowledged=0,note='New patient activity recorded',updated_at=? WHERE patient_id=?",
-                        (iso(), pid),
-                    )
-                    event(
-                        c,
-                        pid,
-                        "activity",
-                        "Patient activity ended the previous non-response episode",
-                    )
-            if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers", "batId")):
-                sync_tasks(c, pid, state)
-            log_checkbacks(c, pid, old.get("checkbacks") or {}, state.get("checkbacks") or {})
-            row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-            recalc(c, row)
+            # Family records are only reachable through each person's own link.
+            if is_family(c, pid):
+                return self.json({"error": "Use your personal link"}, 403)
+            row = save_main_state(c, pid, state)
             reply = {"patient": derive(row, c)}
         # Sent only after the block above has committed.
         return self.json(reply)

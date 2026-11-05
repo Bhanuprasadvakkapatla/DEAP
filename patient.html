@@ -732,7 +732,13 @@
   </main>
   <script>
     'use strict';
-    const KEY = 'deap_patient_caregiver_v5';
+    // A personal link (patient.html?invite=TOKEN) is one person. Their data is kept under its own
+    // storage key, so two links in the same browser are two different people.
+    const INVITE = ((new URLSearchParams(location.search).get('invite') || '').match(/^[A-Za-z0-9_-]{8,64}$/) || [])[0] ||
+      null;
+    const KEY = 'deap_patient_caregiver_v5' + (INVITE ? ':' + INVITE : '');
+    // Who this link belongs to (from the server): person, names, age, language, who leads.
+    let deapInvite = null;
     // Barriers Assessment Tool (BAT), 14 items in packet order, then "Something else".
     const batKeys = ['forget', 'taste', 'swallow', 'side', 'embarrass', 'noneed', 'toomany', 'notwork',
       'confusing', 'ranout', 'afford', 'activities', 'refuse', 'inconvenient'
@@ -906,6 +912,8 @@
         noData: 'Not yet',
         openWeekly: 'Do weekly check-in',
         edit: 'Edit preferences',
+        youAre: 'You are',
+        badLink: 'This link is not valid. Please ask your care team for a new one.',
         emergency: 'If someone is unconscious or unresponsive, call 911.'
       },
       es: {
@@ -1051,6 +1059,8 @@
         noData: 'Todavía no',
         openWeekly: 'Responder por la semana',
         edit: 'Cambiar preferencias',
+        youAre: 'Eres',
+        badLink: 'Este enlace no es válido. Pide uno nuevo a tu equipo de cuidado.',
         emergency: 'Si alguien está inconsciente o no responde, llama al 911.'
       }
     };
@@ -1156,7 +1166,8 @@
       // Step 3 shows ideas or a care-team message for the biggest barrier; skipped when there is neither.
       const helpStep = s.barriers.length && (!s.primary || ideasFor(s.primary).length || strategyMessage[s
         .primary]);
-      return [0, 1, ...(s.barriers.length > 1 ? [2] : []), ...(helpStep ? [3] : []), 4];
+      // With a personal link the server already knows who is answering, so step 0 is skipped.
+      return [...(INVITE ? [] : [0]), 1, ...(s.barriers.length > 1 ? [2] : []), ...(helpStep ? [3] : []), 4];
     }
 
     function helpStep() {
@@ -1197,7 +1208,7 @@
           t('personalizeDesc')) + prefs() +
         `<div class="card soft"><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div></div>`;
       out +=
-        `<div class="btnrow">${step?btn(t('back'),'back','secondary'):''}${btn(step===4?t('finish'):t('continue'),'next')}</div>`;
+        `<div class="btnrow">${steps.indexOf(step)>0?btn(t('back'),'back','secondary'):''}${btn(step===4?t('finish'):t('continue'),'next')}</div>`;
       return out + foot()
     }
 
@@ -1268,7 +1279,8 @@
 
     function settings() {
       return header('YOUR SPACE', t('settingsTitle'), t('personalizeDesc')) +
-        `<div class="card"><label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div><div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
+        // With a personal link, who is answering comes from the link: no name fields, no role switch.
+        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?'':`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
     }
 
@@ -1426,6 +1438,8 @@
           deapPlans = [];
           deapPlansKey = '[]';
           deapClockDays = 0;
+          // With a personal link, reset keeps who this person is.
+          if (INVITE && deapInvite) deapApplyInvite(true);
           return go('sms')
         }
       }
@@ -1553,7 +1567,7 @@
           state: s
         });
         if (id + body === deapLastSent) return;
-        return fetch('/api/patients/' + encodeURIComponent(id), {
+        return fetch(deapUrl(), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json'
@@ -1578,17 +1592,43 @@
       deapNativeSetItem.call(this, key, value);
       if (this === localStorage && key === KEY) deapSchedule()
     };
+    // Personal link: talk only to this person's invite endpoint. Walk-in demo: the anonymous id.
+    const deapUrl = () => INVITE ? '/api/invite/' + encodeURIComponent(INVITE) : '/api/patients/' +
+      encodeURIComponent(deapId);
+
+    // Fill in who this person is from their link (names, role, language).
+    function deapApplyInvite(force) {
+      const inv = deapInvite;
+      if (!force && s.patientName.trim()) return;
+      s.patientName = inv.patientName;
+      s.patientLastInitial = inv.patientLastInitial;
+      s.caregiverName = inv.caregiverName;
+      s.role = inv.person === 'caregiver' ? 'caregiver' : 'self';
+      s.lang = inv.lang === 'es' ? 'es' : 'en';
+      save();
+      render()
+    }
+
     async function deapPoll() {
-      if (!s.patientName.trim()) return;
+      if (!INVITE && !s.patientName.trim()) return;
       try {
-        const r = await fetch('/api/patients/' + encodeURIComponent(deapId), {
+        const r = await fetch(deapUrl(), {
           cache: 'no-store'
         });
+        if (INVITE && r.status === 404) {
+          deapBanner.textContent = '○ ' + t('badLink');
+          deapBanner.style.background = '#fff2d8';
+          return
+        }
         // Server no longer has this patient (e.g. demo database was reset): send state again.
         if (r.status === 404) deapLastSent = null;
         if (!r.ok) return;
         const data = await r.json();
         deapStatus(true);
+        if (INVITE) {
+          deapInvite = data.invite;
+          deapApplyInvite(false)
+        }
         const cp = data.patient?.carePlan || '';
         if (cp !== deapCarePlan) {
           deapCarePlan = cp;
