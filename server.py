@@ -1,90 +1,470 @@
-"""DEAP Connect hackathon demo server. Synthetic data only; NOT production-ready."""
+#!/usr/bin/env python3
+"""DEAP Connect local-only synthetic demo. NOT clinical monitoring."""
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-import json, sqlite3, os, threading, uuid
+import json, sqlite3, threading, re, os
 
-ROOT=Path(__file__).resolve().parent
-DB=ROOT/'deap_demo.sqlite3'
-LOCK=threading.RLock()
+ROOT = Path(__file__).resolve().parent
+DB = Path(os.environ.get("DEAP_DB", str(ROOT / "deap_demo.sqlite3")))
+CAREGIVER_HOURS = float(os.environ.get("DEAP_CAREGIVER_HOURS", "24"))
+CLINICIAN_HOURS = float(os.environ.get("DEAP_CLINICIAN_HOURS", "48"))
+if not 0 < CAREGIVER_HOURS < CLINICIAN_HOURS:
+    raise ValueError("Escalation thresholds must increase and be positive")
+LOCK = threading.RLock()
+NOW = lambda: datetime.now(timezone.utc)
+
+
+def iso(d=None):
+    return (d or NOW()).isoformat().replace("+00:00", "Z")
+
 
 def conn():
-    c=sqlite3.connect(DB,timeout=10)
-    c.row_factory=sqlite3.Row
+    c = sqlite3.connect(DB, timeout=15)
+    c.row_factory = sqlite3.Row
     return c
 
-def now():return datetime.now(timezone.utc).isoformat()
 
-def initialize():
+def init():
     with conn() as c:
-        c.execute('CREATE TABLE IF NOT EXISTS patients (id TEXT PRIMARY KEY, state TEXT NOT NULL, care_plan TEXT NOT NULL DEFAULT \'\', updated_at TEXT NOT NULL)')
-        if c.execute('SELECT COUNT(*) FROM patients').fetchone()[0]:return
-        names=['Jordan Lee','Sam Rivera','Taylor Brooks','Avery Chen','Morgan Davis','Riley Patel','Casey Wilson','Alex Kim','Jamie Flores','Parker Reed','Skyler James','Quinn Carter']
-        barriers=['forget','schedule','activities','swallow','side','taste','forget','schedule','activities','forget','side','schedule']
-        for i,name in enumerate(names):
-            first,last=name.split(' ')
-            status=['green','green','yellow','red','green','yellow','green','red','green','yellow','green','green'][i]
-            weekly=[{'date':(datetime.now(timezone.utc)-timedelta(days=3)).isoformat(),'status':status,'note':('I would like help with my routine.' if status!='green' else '')}]
-            state={'patientName':first,'patientLastInitial':last[0],'role':'caregiver' if i%4==0 else 'self','caregiverName':('Robin' if i%4==0 else ''),'lang':'es' if i%5==0 else 'en','view':'today','step':4,'barriers':[barriers[i]],'primary':barriers[i],'strategies':['reminder'],'time':'07:00','shift':i%3==0,'channel':'SMS','tone':'friendly','routine':'After breakfast','plan':'Use a reminder linked to the morning routine','daily':[{'date':(datetime.now()-timedelta(days=j)).date().isoformat(),'status':'reported_taken'} for j in range(1,14) if (i+j)%4!=0],'weekly':weekly,'contactRequests':1 if i in (3,7) else 0,'silence':i==7}
-            c.execute('INSERT INTO patients VALUES (?,?,?,?)',(f'demo-{i+1:02d}',json.dumps(state),'',now()))
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS patients (id TEXT PRIMARY KEY, state TEXT NOT NULL, care_plan TEXT DEFAULT '', updated_at TEXT NOT NULL, last_engagement TEXT NOT NULL, demo_offset_hours INTEGER DEFAULT 0)"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS escalation (patient_id TEXT PRIMARY KEY, stage TEXT NOT NULL DEFAULT 'none', acknowledged INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, FOREIGN KEY(patient_id) REFERENCES patients(id))"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL, at TEXT NOT NULL)"
+        )
+        if c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0:
+            sample = [
+                ("Alex", "schedule", "yellow"),
+                ("Jordan", "forget", "green"),
+                ("Taylor", "activities", "red"),
+                ("Sam", "swallow", "green"),
+                ("Riley", "side", "yellow"),
+                ("Morgan", "forget", "green"),
+                ("Casey", "schedule", "yellow"),
+                ("Avery", "taste", "green"),
+                ("Jamie", "forget", "red"),
+                ("Cameron", "activities", "green"),
+                ("Drew", "schedule", "green"),
+                ("Parker", "side", "yellow"),
+            ]
+            for i, (name, barrier, status) in enumerate(sample):
+                state = {
+                    "patientName": name,
+                    "patientLastInitial": chr(65 + i),
+                    "role": "caregiver" if i % 4 == 0 else "self",
+                    "caregiverName": "Maria" if i % 4 == 0 else "",
+                    "lang": "en",
+                    "channel": "SMS",
+                    "time": "07:00",
+                    "primary": barrier,
+                    "barriers": [barrier],
+                    "strategies": ["reminder"],
+                    "plan": "Use a reminder with a routine",
+                    "daily": [
+                        {
+                            "date": (NOW() - timedelta(days=j)).date().isoformat(),
+                            "status": "reported_taken",
+                        }
+                        for j in range(1, 4)
+                    ],
+                    "weekly": [
+                        {
+                            "date": iso(NOW() - timedelta(days=2)),
+                            "status": status,
+                            "note": "",
+                        }
+                    ],
+                    "contactRequests": 0,
+                    "silence": False,
+                }
+                c.execute(
+                    "INSERT INTO patients VALUES (?,?,?,?,?,?)",
+                    (
+                        f"demo-{i+1:02}",
+                        json.dumps(state),
+                        "",
+                        iso(),
+                        iso(NOW() - timedelta(hours=2)),
+                        0,
+                    ),
+                )
 
-def record(row):
-    state=json.loads(row['state'])
-    w=state.get('weekly') or []
-    last=w[-1] if w else None
-    status=('red' if (last and last.get('status')=='red') or state.get('contactRequests',0)>0 else 'yellow' if state.get('silence') or (last and last.get('status')=='yellow') else 'green' if last else 'blue')
-    return {'id':row['id'],'patientName':state.get('patientName',''),'patientLastInitial':state.get('patientLastInitial',''),'caregiverName':state.get('caregiverName',''),'role':state.get('role','self'),'lang':state.get('lang','en'),'primary':state.get('primary',''),'barriers':state.get('barriers',[]),'strategies':state.get('strategies',[]),'weekly':w,'daily':state.get('daily',[]),'contactRequests':state.get('contactRequests',0),'silence':state.get('silence',False),'channel':state.get('channel','SMS'),'time':state.get('time',''),'plan':state.get('plan',''),'carePlan':row['care_plan'],'status':status,'updatedAt':row['updated_at']}
+
+def event(c, pid, kind, message):
+    c.execute(
+        "INSERT INTO events(patient_id,kind,message,at) VALUES (?,?,?,?)",
+        (pid, kind, message, iso()),
+    )
+
+
+def derive(row, c):
+    state = json.loads(row["state"])
+    pid = row["id"]
+    er = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
+    stage = er["stage"] if er else "none"
+    reasons = []
+    if state.get("contactRequests"):
+        reasons.append("Support requested")
+    if state.get("silence"):
+        reasons.append("Demo silence flag")
+    if stage in ("caregiver_notice", "clinician_review"):
+        reasons.append("Overdue check-in: " + stage.replace("_", " "))
+    weekly = state.get("weekly") or []
+    if weekly and weekly[-1].get("status") in ("yellow", "red"):
+        reasons.append("Weekly " + weekly[-1]["status"] + " response")
+    last = state.get("weekly") or []
+    status = (
+        "blue"
+        if not state.get("barriers")
+        else (
+            "red"
+            if state.get("contactRequests")
+            or state.get("silence")
+            or (last and last[-1].get("status") == "red")
+            else "yellow" if last and last[-1].get("status") == "yellow" else "green"
+        )
+    )
+    if stage in ("clinician_review", "caregiver_notice"):
+        status = "red" if stage == "clinician_review" else "yellow"
+    return dict(
+        **state,
+        id=pid,
+        attentionReasons=reasons,
+        elapsedHours=max(
+            0,
+            (
+                NOW()
+                - datetime.fromisoformat(row["last_engagement"].replace("Z", "+00:00"))
+            ).total_seconds()
+            / 3600
+            + row["demo_offset_hours"],
+        ),
+        carePlan=row["care_plan"],
+        status=status,
+        escalation={
+            "stage": stage,
+            "acknowledged": bool(er["acknowledged"]) if er else False,
+            "note": er["note"] if er else "",
+            "updatedAt": er["updated_at"] if er else None,
+        },
+        lastEngagement=row["last_engagement"],
+        demoOffsetHours=row["demo_offset_hours"],
+    )
+
+
+def recalc(c, row):
+    """Demo-only thresholds: 24h caregiver notice, 48h clinician review. NOT medical guidance."""
+    pid = row["id"]
+    state = json.loads(row["state"])
+    last = datetime.fromisoformat(row["last_engagement"].replace("Z", "+00:00"))
+    age = (NOW() - last).total_seconds() / 3600 + row["demo_offset_hours"]
+    target = (
+        "clinician_review"
+        if age >= CLINICIAN_HOURS
+        else "caregiver_notice" if age >= CAREGIVER_HOURS else "none"
+    )
+    old = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
+    if old and old["stage"] == "resolved":
+        return
+    if target == "none":
+        if old and old["stage"] != "none":
+            c.execute(
+                "UPDATE escalation SET stage=?, acknowledged=0, note=?, updated_at=? WHERE patient_id=?",
+                ("none", "New patient activity recorded", iso(), pid),
+            )
+            event(
+                c, pid, "resolved", "New patient activity reset non-response escalation"
+            )
+    elif not old or old["stage"] != target:
+        c.execute(
+            "INSERT INTO escalation(patient_id,stage,acknowledged,note,updated_at) VALUES (?,?,0,?,?) ON CONFLICT(patient_id) DO UPDATE SET stage=excluded.stage, acknowledged=0,note=excluded.note,updated_at=excluded.updated_at",
+            (pid, target, "Simulated notice only — not delivered", iso()),
+        )
+        event(
+            c,
+            pid,
+            target,
+            (
+                "Simulated caregiver notice (not sent)"
+                if target == "caregiver_notice"
+                else "Clinician review flagged (dashboard only)"
+            ),
+        )
+
+
+def validate_state(state):
+    for key in (
+        "patientName",
+        "caregiverName",
+        "other",
+        "routine",
+        "plan",
+        "time",
+        "channel",
+        "tone",
+        "lang",
+        "role",
+        "primary",
+    ):
+        if key in state and (not isinstance(state[key], str) or len(state[key]) > 1200):
+            return "Invalid " + key
+    for key in ("barriers", "strategies"):
+        if not isinstance(state.get(key, []), list) or any(
+            not isinstance(x, str) for x in state.get(key, [])
+        ):
+            return "Invalid " + key
+    if state.get("primary") and state["primary"] not in state.get("barriers", []):
+        return "Primary barrier must be selected"
+    for key in ("daily", "weekly"):
+        records = state.get(key, [])
+        if not isinstance(records, list) or len(records) > 1000:
+            return "Invalid " + key
+        for item in records:
+            if not isinstance(item, dict) or not isinstance(item.get("date"), str):
+                return "Invalid check-in"
+            try:
+                parsed = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+            except ValueError:
+                return "Invalid check-in date"
+            allowed = (
+                ("reported_taken", "reported_missed")
+                if key == "daily"
+                else ("green", "yellow", "red")
+            )
+            if item.get("status") not in allowed:
+                return "Invalid check-in status"
+            if (
+                not isinstance(item.get("note", ""), str)
+                or len(item.get("note", "")) > 400
+            ):
+                return "Invalid comment"
+        if key == "daily" and len({x["date"] for x in records}) != len(records):
+            return "Duplicate daily check-in"
+    if (
+        type(state.get("contactRequests", 0)) != int
+        or not 0 <= state.get("contactRequests", 0) <= 100000
+    ):
+        return "Invalid support request count"
+    for key in ("silence", "shift"):
+        if key in state and type(state[key]) != bool:
+            return "Invalid " + key
+    return None
+
+
+def escalation_worker():
+    while True:
+        try:
+            with LOCK, conn() as c:
+                for row in c.execute("SELECT * FROM patients").fetchall():
+                    recalc(c, row)
+        except Exception as exc:
+            print("Escalation sweep failed:", exc, flush=True)
+        threading.Event().wait(30)
+
 
 class Handler(SimpleHTTPRequestHandler):
-    def __init__(self,*a,**kw):super().__init__(*a,directory=str(ROOT),**kw)
-    def json_response(self,status,obj):
-        raw=json.dumps(obj,ensure_ascii=False).encode()
-        self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
-    def read_json(self):
-        n=int(self.headers.get('Content-Length','0'))
-        if n>100000:self.json_response(413,{'error':'Payload too large'});return None
-        try:return json.loads(self.rfile.read(n))
-        except (ValueError,UnicodeDecodeError):self.json_response(400,{'error':'Invalid JSON'});return None
-    def do_GET(self):
-        path=urlparse(self.path).path
-        if path=='/api/health':return self.json_response(200,{'ok':True,'mode':'synthetic-demo'})
-        if path=='/api/patients':
-            with LOCK,conn() as c:rows=c.execute('SELECT * FROM patients ORDER BY updated_at DESC').fetchall()
-            return self.json_response(200,{'patients':[record(r) for r in rows]})
-        if path.startswith('/api/patients/'):
-            pid=unquote(path.split('/')[-1])
-            with LOCK,conn() as c:row=c.execute('SELECT * FROM patients WHERE id=?',(pid,)).fetchone()
-            return self.json_response(200,{'patient':record(row),'state':json.loads(row['state'])} if row else {'error':'Not found'}) if row else self.json_response(404,{'error':'Not found'})
-        if path=='/':self.path='/clinician.html'
-        return super().do_GET()
-    def do_PUT(self):
-        path=urlparse(self.path).path
-        if not path.startswith('/api/patients/'):return self.json_response(404,{'error':'Not found'})
-        pid=unquote(path.split('/')[-1]);data=self.read_json()
-        if data is None:return
-        state=data.get('state') if isinstance(data,dict) else None
-        if not isinstance(state,dict) or not isinstance(state.get('patientName'),str) or len(json.dumps(state))>70000:return self.json_response(400,{'error':'Invalid patient state'})
-        # Demo safety: never store contact details or other sensitive patient identifiers.
-        state={k:v for k,v in state.items() if k not in ('phone','email','dob','address')}
-        with LOCK,conn() as c:
-            old=c.execute('SELECT care_plan FROM patients WHERE id=?',(pid,)).fetchone()
-            c.execute('INSERT INTO patients(id,state,care_plan,updated_at) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at',(pid,json.dumps(state),old['care_plan'] if old else '',now()))
-            row=c.execute('SELECT * FROM patients WHERE id=?',(pid,)).fetchone()
-        return self.json_response(200,{'patient':record(row)})
-    def do_POST(self):
-        path=urlparse(self.path).path
-        if not path.startswith('/api/patients/') or not path.endswith('/care-plan'):return self.json_response(404,{'error':'Not found'})
-        pid=unquote(path.split('/')[-2]);data=self.read_json()
-        if data is None:return
-        plan=data.get('carePlan') if isinstance(data,dict) else None
-        if not isinstance(plan,str) or len(plan)>1200:return self.json_response(400,{'error':'Care plan must be text under 1200 characters'})
-        with LOCK,conn() as c:
-            cur=c.execute('UPDATE patients SET care_plan=?,updated_at=? WHERE id=?',(plan,now(),pid))
-            if not cur.rowcount:return self.json_response(404,{'error':'Not found'})
-        return self.json_response(200,{'ok':True,'carePlan':plan})
+    def __init__(self, *a, **kw):
+        super().__init__(*a, directory=str(ROOT), **kw)
 
-if __name__=='__main__':
-    initialize();port=int(os.environ.get('PORT','8000'))
-    print(f'DEAP Connect demo: http://localhost:{port} (patient: /patient.html; clinician: /clinician.html)',flush=True)
-    ThreadingHTTPServer(('127.0.0.1',port),Handler).serve_forever()
+    def json(self, obj, code=200):
+        raw = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def body(self):
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return None
+        if n < 0 or n > 100000:
+            return None
+        try:
+            return json.loads(self.rfile.read(n))
+        except (ValueError, UnicodeError):
+            return None
+
+    def route(self):
+        path = unquote(urlparse(self.path).path)
+        m = re.fullmatch(
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate))?", path
+        )
+        return path, m
+
+    def do_GET(self):
+        path, m = self.route()
+        if path == "/api/health":
+            return self.json(
+                {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False}
+            )
+        if path == "/api/patients" or (m and not m.group(2)):
+            with LOCK, conn() as c:
+                if path == "/api/patients":
+                    rows = c.execute("SELECT * FROM patients").fetchall()
+                    for row in rows:
+                        recalc(c, row)
+                    return self.json({"patients": [derive(row, c) for row in rows]})
+                row = c.execute(
+                    "SELECT * FROM patients WHERE id=?", (m.group(1),)
+                ).fetchone()
+                if not row:
+                    return self.json({"error": "Not found"}, 404)
+                recalc(c, row)
+                return self.json({"patient": derive(row, c)})
+        if m and m.group(2) == "escalation":
+            with conn() as c:
+                events = c.execute(
+                    "SELECT kind,message,at FROM events WHERE patient_id=? ORDER BY id DESC LIMIT 30",
+                    (m.group(1),),
+                ).fetchall()
+                return self.json({"events": [dict(e) for e in events]})
+        if path not in ("/patient.html", "/clinician.html", "/"):
+            return self.json({"error": "Not found"}, 404)
+        if path == "/":
+            self.path = "/patient.html"
+        return super().do_GET()
+
+    def do_HEAD(self):
+        path, _ = self.route()
+        if path not in ("/patient.html", "/clinician.html", "/"):
+            return self.send_error(404)
+        if path == "/":
+            self.path = "/patient.html"
+        return super().do_HEAD()
+
+    def do_PUT(self):
+        path, m = self.route()
+        data = self.body()
+        if (
+            not m
+            or m.group(2)
+            or not isinstance(data, dict)
+            or not isinstance(data.get("state"), dict)
+        ):
+            return self.json({"error": "Invalid request"}, 400)
+        state = data["state"]
+        pid = m.group(1)
+        error = validate_state(state)
+        if error:
+            return self.json({"error": error}, 400)
+        if len(json.dumps(state)) > 80000:
+            return self.json({"error": "Too large"}, 413)
+        with LOCK, conn() as c:
+            existing = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+            old = json.loads(existing["state"]) if existing else {}
+            activity = not existing or any(
+                state.get(k) != old.get(k)
+                for k in ("daily", "weekly", "contactRequests")
+            )
+            when = iso() if activity else existing["last_engagement"]
+            c.execute(
+                "INSERT INTO patients(id,state,care_plan,updated_at,last_engagement,demo_offset_hours) VALUES (?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,last_engagement=excluded.last_engagement,demo_offset_hours=CASE WHEN ? THEN 0 ELSE patients.demo_offset_hours END",
+                (pid, json.dumps(state), "", iso(), when, int(activity)),
+            )
+            if activity:
+                er = c.execute(
+                    "SELECT * FROM escalation WHERE patient_id=?", (pid,)
+                ).fetchone()
+                if er and er["stage"] != "none":
+                    c.execute(
+                        "UPDATE escalation SET stage='none',acknowledged=0,note='New patient activity recorded',updated_at=? WHERE patient_id=?",
+                        (iso(), pid),
+                    )
+                    event(
+                        c,
+                        pid,
+                        "activity",
+                        "Patient activity ended the previous non-response episode",
+                    )
+            row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+            recalc(c, row)
+            return self.json({"patient": derive(row, c)})
+
+    def do_POST(self):
+        path, m = self.route()
+        data = self.body()
+        if not m or not m.group(2) or not isinstance(data, dict):
+            return self.json({"error": "Invalid request"}, 400)
+        pid, action = m.groups()
+        with LOCK, conn() as c:
+            row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+            if not row:
+                return self.json({"error": "Not found"}, 404)
+            if action == "care-plan":
+                value = data.get("carePlan", "")
+                if not isinstance(value, str) or len(value) > 1200:
+                    return self.json({"error": "Invalid note"}, 400)
+                c.execute("UPDATE patients SET care_plan=? WHERE id=?", (value, pid))
+                event(c, pid, "care_plan", "Clinician updated follow-up note")
+            elif action == "simulate":
+                hours = data.get("hours")
+                if type(hours) != int or hours not in (0, 25, 49):
+                    return self.json({"error": "Demo hours must be 0, 25, or 49"}, 400)
+                c.execute(
+                    "UPDATE escalation SET stage='none',acknowledged=0 WHERE patient_id=? AND stage='resolved'",
+                    (pid,),
+                )
+                c.execute(
+                    "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
+                )
+                event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
+            elif action == "escalation":
+                if data.get("action") not in ("acknowledge", "resolve"):
+                    return self.json({"error": "Invalid action"}, 400)
+                recalc(c, row)
+                er = c.execute(
+                    "SELECT * FROM escalation WHERE patient_id=?", (pid,)
+                ).fetchone()
+                if er and er["stage"] == "resolved" and data["action"] == "resolve":
+                    return self.json({"patient": derive(row, c)})
+                if not er or er["stage"] in ("none", "resolved"):
+                    return self.json({"error": "No active overdue alert"}, 409)
+                if data["action"] == "acknowledge" and er["acknowledged"]:
+                    return self.json({"patient": derive(row, c)})
+                if data["action"] == "acknowledge":
+                    c.execute(
+                        "UPDATE escalation SET acknowledged=1,updated_at=? WHERE patient_id=?",
+                        (iso(), pid),
+                    )
+                    event(
+                        c,
+                        pid,
+                        "acknowledged",
+                        "Clinician acknowledged non-response alert",
+                    )
+                else:
+                    c.execute(
+                        "UPDATE escalation SET stage=?,acknowledged=0,note=?,updated_at=? WHERE patient_id=?",
+                        (
+                            "resolved",
+                            "Clinician marked demo follow-up resolved",
+                            iso(),
+                            pid,
+                        ),
+                    )
+                    event(
+                        c,
+                        pid,
+                        "resolved",
+                        "Clinician marked alert resolved (demo only)",
+                    )
+            row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+            recalc(c, row)
+            return self.json({"patient": derive(row, c)})
+
+
+if __name__ == "__main__":
+    init()
+    threading.Thread(target=escalation_worker, daemon=True).start()
+    print(
+        "DEAP Connect synthetic demo: http://localhost:8000/clinician.html", flush=True
+    )
+    ThreadingHTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
