@@ -418,6 +418,10 @@
       color: #5a7480
     }
 
+    .stat.miss strong {
+      color: #8c542f
+    }
+
     .days {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -762,7 +766,7 @@
         swap: 'You can ask your team whether another strategy would fit better.',
         progressTitle: 'Your progress',
         progressDesc: 'These numbers show your check-ins in this demo, not a medical score.',
-        days: 'Days checked in',
+        daysSaid: 'Days you said',
         last30: 'In the last 30 days',
         weekResult: 'Latest weekly answer',
         noWeekly: 'No weekly check-in yet',
@@ -878,7 +882,7 @@
         swap: 'Puedes preguntar si otra estrategia te ayudaría más.',
         progressTitle: 'Tu progreso',
         progressDesc: 'Estos números muestran respuestas de esta demostración, no una nota médica.',
-        days: 'Días registrados',
+        daysSaid: 'Días que dijiste',
         last30: 'En los últimos 30 días',
         weekResult: 'Última respuesta semanal',
         noWeekly: 'Aún no hay respuesta semanal',
@@ -1039,15 +1043,20 @@
 
     function progress() {
       const recent = s.daily.filter(x => x.date >= dateBefore(29));
+      const takenDays = recent.filter(x => x.status === 'reported_taken').length;
+      const missedDays = recent.filter(x => x.status === 'reported_missed').length;
       const days = Array.from({
         length: 30
       }, (_, i) => {
         const date = dateBefore(29 - i);
-        return `<div class="day ${recent.some(x=>x.date===date)?'done':'empty'}" title="${date}" aria-label="${date}: ${recent.some(x=>x.date===date)?'checked in':'no check-in'}">${new Date(date+'T12:00:00').getDate()}</div>`
+        const rec = recent.find(x => x.date === date);
+        const kind = !rec ? 'empty' : rec.status === 'reported_missed' ? 'miss' : 'done';
+        const said = !rec ? t('noData') : t(kind === 'miss' ? 'missed' : 'took');
+        return `<div class="day ${kind}" title="${date}" aria-label="${date}: ${esc(said)}">${new Date(date+'T12:00:00').getDate()}</div>`
       }).join('');
       const last = s.weekly.at(-1);
       return header('YOUR JOURNEY', t('progressTitle'), t('progressDesc')) +
-        `<div class="statrow"><div class="stat"><strong>${recent.length}</strong><span>${t('days')} · ${t('last30')}</span></div><div class="stat"><strong>${s.weekly.length}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div><div class="card"><h3>${t('silence')}</h3><p class="muted">${t('nudgeText')}</p>${btn(s.silence?t('resetSilence'):t('simulate'),'silence','secondary')}</div>` +
+        `<div class="statrow"><div class="stat"><strong>${takenDays}</strong><span>${t('daysSaid')} “${t('took')}” · ${t('last30')}</span></div><div class="stat miss"><strong>${missedDays}</strong><span>${t('daysSaid')} “${t('missed')}” · ${t('last30')}</span></div><div class="stat" style="grid-column:1/-1"><strong>${s.weekly.length}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div><div class="card"><h3>${t('silence')}</h3><p class="muted">${t('nudgeText')}</p>${btn(s.silence?t('resetSilence'):t('simulate'),'silence','secondary')}</div>` +
         foot()
     }
 
