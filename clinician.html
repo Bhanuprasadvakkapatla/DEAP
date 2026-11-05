@@ -343,6 +343,27 @@
       margin-top: 4px
     }
 
+    .enrollgrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 12px
+    }
+
+    .enrollgrid label {
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 700
+    }
+
+    code.link-url {
+      font-size: 12px;
+      background: #f2f6f8;
+      padding: 6px 8px;
+      border-radius: 8px;
+      overflow-wrap: anywhere
+    }
+
     table.levels {
       min-width: 0;
       max-width: 340px;
@@ -628,6 +649,9 @@
      <button data-view="attention">
       ◉   Attention queue
      </button>
+     <button data-view="enroll">
+      ＋ Enroll family
+     </button>
      <button data-view="reports">
       ▥   Insights &amp; reports
      </button>
@@ -868,7 +892,7 @@
       const w = p.weekly || [],
         last = w.at(-1),
         daily = p.daily || [];
-      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div>${chartPanel(p)}<div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Demo only. Moves this patient's check-back clock so check-backs come due; real time is not changed.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
+      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div>${familyPanel(p)}${chartPanel(p)}<div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Demo only. Moves this patient's check-back clock so check-backs come due; real time is not changed.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
     }
 
     function reports() {
@@ -958,6 +982,32 @@
       return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
     }
 
+    // ---- Families: enroll, personal links ----
+    const leadsNames = {
+      parent: 'Parent leads',
+      shared: 'Shared',
+      patient: 'Patient leads'
+    };
+    const defaultLeads = age => age < 10 ? 'parent' : age < 18 ? 'shared' : 'patient';
+    const inviteUrl = token => location.origin + '/patient.html?invite=' + encodeURIComponent(token);
+    let enrollResult = null,
+      leadsTouched = false;
+
+    function linkList(f, name) {
+      return `<div class="list">${f.links.map(l=>{const u=inviteUrl(l.token);const who=l.person==='patient'?esc(name)+' (patient)':esc(f.caregiverName)+' (caregiver)';return `<div class="item invite" data-person="${l.person}"><small>${who}</small><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><code class="link-url">${esc(u)}</code><button class="button small secondary" data-copy="${esc(u)}">Copy</button></div></div>`}).join('')}</div><p class="muted">Demo links only. No real SMS is sent. Each link is one person.</p>`
+    }
+
+    function familyPanel(p) {
+      const f = p.family;
+      if (!f) return '';
+      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong></div><div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
+    }
+
+    function enroll() {
+      const r = enrollResult;
+      return `<div class="panel" id="enrollPanel"><h2>Enroll a family</h2><p class="muted">Fictional names only. Under 10: the caregiver answers. 10 and older: the patient and the caregiver each get their own link.</p><div class="enrollgrid"><label>Patient first name<input id="enFirst" maxlength="45"></label><label>Last initial<input id="enInitial" maxlength="1" style="width:70px"></label><label>Patient age<input id="enAge" type="number" min="0" max="30" style="width:90px"></label><label>Language<select id="enLang"><option value="en">English</option><option value="es">Spanish</option></select></label><label>Caregiver first name<input id="enCaregiver" maxlength="45"></label><label>Who leads<select id="enLeads">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label></div><div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="button" id="enrollBtn">Enroll family</button><span id="enrollMsg" class="muted" role="status"></span></div></div>${r?`<div class="panel" id="enrollLinks"><h2>Personal links for ${esc(r.name)}</h2>${linkList(r.family, r.name)}<button class="link" data-open="${esc(r.id)}">View patient →</button></div>`:''}`
+    }
+
     function guide() {
       return `<div class="panel"><h2>Live two-view demonstration</h2><ol style="line-height:2"><li>Open <a href="/patient.html" target="_blank" rel="noopener">Patient & caregiver app</a> in a separate browser tab.</li><li>Complete onboarding using a fictional name and select one or more barriers.</li><li>Return to this clinician portal. The new patient appears in the roster after synchronization.</li><li>Submit a Yellow or Red weekly check-in in the patient tab.</li><li>Open Attention queue here to see the changed status.</li><li>Open the patient record, write a fictional follow-up note, and click Save.</li><li>Return to the patient Today screen; the note appears after the next refresh/poll.</li></ol><div class="alert"><strong>Important:</strong> This is a local hackathon demo, not a secure clinical product. There is no authentication, access control, encryption at rest, EHR connection, or real SMS delivery. Never enter real patient data.</div></div>`
     }
@@ -983,7 +1033,8 @@
         worklist: 'My worklist',
         attention: 'Attention queue',
         reports: 'Insights & reports',
-        guide: 'Demo guide'
+        guide: 'Demo guide',
+        enroll: 'Enroll family'
       } [view]);
       el('subheading').textContent = selected ? 'Review engagement and share a follow-up note.' :
         view === 'worklist' ? 'Barriers patients reported, routed to the team member who follows up.' :
@@ -994,6 +1045,7 @@
       el('content').innerHTML = selected ? detail(patients.find(p => p.id === selected) || {
         id: selected
       }) : view === 'reports' ? reports() : view === 'guide' ? guide() : view === 'worklist' ? worklist() :
+        view === 'enroll' ? enroll() :
         overview();
       shownCarePlan = el('carePlan') ? el('carePlan').value : '';
       // A button-triggered re-render of the same patient keeps the unsaved note.
@@ -1019,7 +1071,7 @@
         el('connection').textContent = '● Live demo connected';
         // Do not re-render under someone typing a note or filling in a plan form.
         if (!document.activeElement?.matches('input,textarea,select') && !noteHasUnsavedChanges() &&
-          planFormFor === null) render();
+          planFormFor === null && !(view === 'enroll' && !selected)) render();
       } catch (e) {
         el('connection').className = 'pill red';
         el('connection').textContent = '○ Backend offline';
@@ -1042,6 +1094,55 @@
         planFormFor = Number(makePlan.dataset.makePlan || makePlan.dataset.adjust);
         render();
         el('plan_who')?.focus();
+        return
+      }
+      const copyBtn = e.target.closest('[data-copy]');
+      if (copyBtn) {
+        const url = copyBtn.dataset.copy;
+        try {
+          await navigator.clipboard.writeText(url);
+          copyBtn.textContent = 'Copied'
+        } catch (err) {
+          // Clipboard blocked: select the link text so it can be copied by hand.
+          const code = copyBtn.parentElement.querySelector('code');
+          if (code) getSelection().selectAllChildren(code);
+          copyBtn.textContent = 'Press Ctrl+C'
+        }
+        return
+      }
+      if (e.target.id === 'enrollBtn') {
+        const b = e.target;
+        const body = {
+          patientName: el('enFirst').value,
+          patientLastInitial: el('enInitial').value,
+          age: el('enAge').value === '' ? null : Number(el('enAge').value),
+          lang: el('enLang').value,
+          caregiverName: el('enCaregiver').value,
+          leads: el('enLeads').value
+        };
+        b.disabled = true;
+        try {
+          const r = await fetch('/api/families', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+          const d = await r.json();
+          if (!r.ok) throw Error(d.error || 'Unable to enroll');
+          enrollResult = {
+            id: d.id,
+            family: d.family,
+            name: body.patientName.trim() + ' ' + body.patientLastInitial.toUpperCase() + '.'
+          };
+          leadsTouched = false;
+          await refresh();
+          render()
+        } catch (err) {
+          b.disabled = false;
+          el('enrollMsg').textContent = 'Could not enroll: ' + err.message
+        }
         return
       }
       if (e.target.id === 'addLab' && selected) {
@@ -1226,6 +1327,9 @@
       }
     });
     document.addEventListener('input', e => {
+      // Who leads follows the age (under 10 / 10-17 / 18+) until it is chosen by hand.
+      if (e.target.id === 'enAge' && !leadsTouched && e.target.value !== '') el('enLeads').value = defaultLeads(
+        Number(e.target.value));
       if (e.target.id === 'search') {
         search = e.target.value;
         const caret = e.target.selectionStart;
@@ -1240,6 +1344,7 @@
         filter = e.target.value;
         render()
       }
+      if (e.target.id === 'enLeads') leadsTouched = true;
       if (e.target.id === 'showAllTasks') {
         showAllTasks = e.target.checked;
         render()

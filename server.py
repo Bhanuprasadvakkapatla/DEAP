@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
-import json, sqlite3, threading, re, os, argparse, socket, statistics, calendar
+import json, sqlite3, threading, re, os, argparse, socket, statistics, calendar, secrets
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent
@@ -67,6 +67,15 @@ DURABILITY_DAYS = int(os.environ.get("DEAP_DURABILITY_DAYS", "30"))
 if DURABILITY_DAYS < 1:
     raise ValueError("DEAP_DURABILITY_DAYS must be at least 1")
 OUTCOME_NAMES = {"working": "Working", "not_working": "Not working", "adjust": "Adjust"}
+
+# Families (packet page 4, must-keep #2): caregiver only under 10; patient and caregiver from 10.
+# "Who leads" decides who gets reminders and check-backs (hand-off of responsibility).
+LEADS_NAMES = {"parent": "Parent leads", "shared": "Shared", "patient": "Patient leads"}
+
+
+def default_leads(age):
+    return "parent" if age < 10 else "shared" if age < 18 else "patient"
+
 
 # Chart risk signals (packet page 4, must-keep #6). Demo settings; the clinical team sets real ones.
 # The packet says "swing more than 2 SD across 4 draws". We read this as the standard deviation
@@ -231,6 +240,67 @@ def init():
         )
         if c.execute("SELECT COUNT(*) FROM labs").fetchone()[0] == 0:
             seed_chart(c)
+        # Families and personal links. Clinician-owned; separate from every person's state.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS families (id TEXT PRIMARY KEY, age INTEGER NOT NULL, leads TEXT NOT NULL, caregiver_name TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(id) REFERENCES patients(id))"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, family_id TEXT NOT NULL, person TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
+        )
+        # The caregiver's own answers for a patient aged 10+ (the patient's live in patients.state).
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS caregiver_states (family_id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
+        )
+
+
+def create_family(c, first, initial, age, lang, caregiver, leads=None):
+    """Enroll a family: one patient record plus a personal link per person. Returns the family id."""
+    fid = "fam-" + secrets.token_hex(6)
+    state = {
+        "patientName": first,
+        "patientLastInitial": initial,
+        "caregiverName": caregiver,
+        # Under 10 the caregiver is the user and answers in this record.
+        "role": "caregiver" if age < 10 else "self",
+        "lang": lang,
+        "barriers": [],
+        "batAnswers": {},
+        "strategies": [],
+        "daily": [],
+        "weekly": [],
+        "contactRequests": 0,
+    }
+    c.execute(
+        "INSERT INTO patients(id,state,care_plan,updated_at,last_engagement,demo_offset_hours) VALUES (?,?,?,?,?,0)",
+        (fid, json.dumps(state), "", iso(), iso()),
+    )
+    c.execute(
+        "INSERT INTO families(id,age,leads,caregiver_name,created_at) VALUES (?,?,?,?,?)",
+        (fid, age, leads or default_leads(age), caregiver, iso()),
+    )
+    for person in (["caregiver"] if age < 10 else ["patient", "caregiver"]):
+        c.execute(
+            "INSERT INTO invites(token,family_id,person,created_at) VALUES (?,?,?,?)",
+            (secrets.token_urlsafe(12), fid, person, iso()),
+        )
+    event(c, fid, "enrolled", f"Family enrolled (age {age}, {LEADS_NAMES[leads or default_leads(age)]}); personal links created")
+    return fid
+
+
+def family_info(c, pid):
+    """Family details for the care team, or None for a walk-in demo patient."""
+    f = c.execute("SELECT * FROM families WHERE id=?", (pid,)).fetchone()
+    if not f:
+        return None
+    links = c.execute(
+        "SELECT person, token FROM invites WHERE family_id=? ORDER BY person DESC", (pid,)
+    ).fetchall()
+    return {
+        "age": f["age"],
+        "leads": f["leads"],
+        "caregiverName": f["caregiver_name"],
+        "links": [{"person": l["person"], "token": l["token"]} for l in links],
+    }
 
 
 # Fictional chart data for the demo patients (no real EHR). Levels are tacrolimus in ng/mL.
@@ -577,6 +647,7 @@ def derive(row, c, chart=False):
             if rank[status] < rank["yellow"]:
                 status = "yellow"
         extra = {
+            "family": family_info(c, pid),
             "chart": signals,
             # Latest weekly answer is Green but the chart has a flag.
             "chartMismatch": bool(signals["flags"]) and latest == "green",
@@ -896,6 +967,10 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         path, m = self.route()
         data = self.body()
+        if path == "/api/families" and isinstance(data, dict):
+            with LOCK, db() as c:
+                reply = self.enroll(c, data)
+            return self.json(*reply)
         tm = re.fullmatch(r"/api/tasks/(\d+)/(plan|outcome)", path)
         if tm and isinstance(data, dict):
             with LOCK, db() as c:
@@ -909,6 +984,28 @@ class Handler(SimpleHTTPRequestHandler):
             reply = self.post_action(c, pid, action, data)
         # Sent only after the block above has committed.
         return self.json(*reply)
+
+    def enroll(self, c, data):
+        """Clinician enrolls a family; returns the personal links."""
+        first = data.get("patientName")
+        initial = data.get("patientLastInitial")
+        caregiver = data.get("caregiverName")
+        age = data.get("age")
+        lang = data.get("lang")
+        leads = data.get("leads") or None
+        for v, label in ((first, "patient first name"), (caregiver, "caregiver first name")):
+            if not isinstance(v, str) or not v.strip() or len(v) > 45:
+                return {"error": f"Please enter the {label}"}, 400
+        if not isinstance(initial, str) or not re.fullmatch(r"[A-Za-zÀ-ÿ]", initial):
+            return {"error": "Last initial must be one letter"}, 400
+        if type(age) != int or not 0 <= age <= 30:
+            return {"error": "Age must be a whole number from 0 to 30"}, 400
+        if lang not in ("en", "es"):
+            return {"error": "Language must be English or Spanish"}, 400
+        if leads is not None and leads not in LEADS_NAMES:
+            return {"error": "Who leads must be parent, shared or patient"}, 400
+        fid = create_family(c, first.strip(), initial.upper(), age, lang, caregiver.strip(), leads)
+        return {"id": fid, "family": family_info(c, fid)}, 200
 
     def task_action(self, c, task_id, action, data):
         """Clinician actions on one barrier task; returns (reply, status)."""
