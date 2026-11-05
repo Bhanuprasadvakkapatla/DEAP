@@ -61,6 +61,12 @@ OWNER_ROLES = list(dict.fromkeys(BARRIER_OWNERS.values()))
 TASK_STATUSES = ("needs_plan", "plan_agreed", "keep_checking")
 # The owner checks back within 2 weeks of agreeing a plan (packet page 4).
 CHECK_BACK_DAYS = 14
+# Durability interval is a demo setting; the clinical team sets the real schedule.
+# Days until the next check-back once the owner marks a plan "Working" (keep checking).
+DURABILITY_DAYS = int(os.environ.get("DEAP_DURABILITY_DAYS", "30"))
+if DURABILITY_DAYS < 1:
+    raise ValueError("DEAP_DURABILITY_DAYS must be at least 1")
+OUTCOME_NAMES = {"working": "Working", "not_working": "Not working", "adjust": "Adjust"}
 # The five parts of a concrete plan, plus the version the patient sees.
 PLAN_FIELDS = ("who", "what", "how", "where", "when", "patientText")
 # Patient check-back answers ("Is your plan working?"), stored in the patient's own state.
@@ -687,7 +693,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         path, m = self.route()
         data = self.body()
-        tm = re.fullmatch(r"/api/tasks/(\d+)/(plan)", path)
+        tm = re.fullmatch(r"/api/tasks/(\d+)/(plan|outcome)", path)
         if tm and isinstance(data, dict):
             with LOCK, db() as c:
                 reply = self.task_action(c, int(tm.group(1)), tm.group(2), data)
@@ -731,6 +737,54 @@ class Handler(SimpleHTTPRequestHandler):
                 "plan_agreed",
                 f"Plan agreed for '{t['barrier']}' by {by}; check back by {due.date().isoformat()}",
             )
+        elif action == "outcome":
+            outcome = data.get("outcome")
+            if outcome not in OUTCOME_NAMES:
+                return {"error": "Outcome must be working, not_working or adjust"}, 400
+            current = c.execute(
+                "SELECT * FROM plans WHERE task_id=? AND closed_at IS NULL", (task_id,)
+            ).fetchone()
+            if not current or t["status"] == "needs_plan":
+                return {"error": "This barrier has no plan to review yet"}, 409
+            b = t["barrier"]
+            if outcome == "working":
+                # Durability phase: keep the plan, check again later.
+                due = now + timedelta(days=DURABILITY_DAYS)
+                c.execute(
+                    "UPDATE tasks SET status='keep_checking', due_date=? WHERE id=?",
+                    (iso(due), task_id),
+                )
+                event(c, pid, "outcome", f"'{b}': Working - keep checking; next check-back {due.date().isoformat()} ({by})")
+            elif outcome == "not_working":
+                # Close the plan (kept in history); the barrier needs a new plan.
+                c.execute(
+                    "UPDATE plans SET closed_at=?, outcome='not_working' WHERE id=?",
+                    (iso(now), current["id"]),
+                )
+                c.execute(
+                    "UPDATE tasks SET status='needs_plan', due_date=NULL WHERE id=?",
+                    (task_id,),
+                )
+                event(c, pid, "outcome", f"'{b}': Not working - plan closed; needs a new plan ({by})")
+            else:
+                fields, error = clean_plan(data)
+                if error:
+                    return {"error": error}, 400
+                # Keep the old version in history; the edited plan becomes current.
+                c.execute(
+                    "UPDATE plans SET closed_at=?, outcome='adjusted' WHERE id=?",
+                    (iso(now), current["id"]),
+                )
+                c.execute(
+                    "INSERT INTO plans(task_id,who,what,how,where_text,when_text,patient_text,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (task_id, fields["who"], fields["what"], fields["how"], fields["where"], fields["when"], fields["patientText"], iso(now), by),
+                )
+                due = now + timedelta(days=CHECK_BACK_DAYS)
+                c.execute(
+                    "UPDATE tasks SET status='plan_agreed', due_date=? WHERE id=?",
+                    (iso(due), task_id),
+                )
+                event(c, pid, "outcome", f"'{b}': Adjust - plan changed; new check-back {due.date().isoformat()} ({by})")
         st = json.loads(
             c.execute("SELECT state FROM patients WHERE id=?", (pid,)).fetchone()["state"]
         )

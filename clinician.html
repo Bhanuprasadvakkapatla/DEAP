@@ -343,6 +343,21 @@
       margin-top: 4px
     }
 
+    .planhistory {
+      margin: 6px 0;
+      font-size: 14px
+    }
+
+    .planhistory summary {
+      cursor: pointer;
+      color: #117e71;
+      font-weight: 700
+    }
+
+    .planhistory .item {
+      margin-top: 8px
+    }
+
     .patientctx {
       display: grid;
       gap: 4px;
@@ -701,8 +716,25 @@
       plan_agreed: 'Plan agreed',
       keep_checking: 'Keep checking'
     };
-    // Task whose plan form is open (only one at a time).
-    let planFormFor = null;
+    // Task whose plan form is open (only one at a time); 'new' plan or 'adjust' the current one.
+    let planFormFor = null,
+      planFormMode = 'new';
+    // Plan-history lists the user opened, kept open across the 4-second refresh.
+    const openHistory = new Set();
+    document.addEventListener('toggle', e => {
+      const id = Number(e.target.dataset?.hist);
+      if (!id) return;
+      e.target.open ? openHistory.add(id) : openHistory.delete(id)
+    }, true);
+    const historyNames = {
+      not_working: 'Not working',
+      adjusted: 'Adjusted'
+    };
+
+    function planHistory(t) {
+      const h = t.planHistory || [];
+      return h.length ? `<details class="planhistory" data-hist="${t.id}" ${openHistory.has(t.id)?'open':''}><summary>Earlier plans (${h.length})</summary>${h.slice().reverse().map(pl=>`<div class="item"><strong>${esc(historyNames[pl.outcome]||pl.outcome||'Closed')} · closed ${esc(shortDate(pl.closedAt))}</strong><div class="ownwords">${esc(pl.patientText)}</div><div class="meta">${PLAN_INPUTS.map(([k,label])=>label+': '+esc(pl[k])).join(' · ')}</div></div>`).join('')}</details>` : ''
+    }
     const PLAN_INPUTS = [
       ['who', 'Who', 'Who will do it, and who helps'],
       ['what', 'What', 'The one solution to try'],
@@ -737,15 +769,21 @@
       const options = packetIdeas[t.barrier] ? `<ul>${packetIdeas[t.barrier].map(k=>`<li>${esc(strategyNames[k]||k)}</li>`).join('')}</ul>` :
         packetMessages[t.barrier] ? `<p>Message the patient saw: “${esc(packetMessages[t.barrier])}”</p>` :
         '<p>The packet has no action plan for this item.</p>';
-      return `<div class="planform" id="planForm" data-task="${t.id}"><div class="planfields"><p class="muted" style="margin-top:0">Make this plan with the patient, not for them.</p>${PLAN_INPUTS.map(([k,label,hint])=>`<label for="plan_${k}">${label}</label><input id="plan_${k}" maxlength="400" placeholder="${esc(hint)}">`).join('')}<label for="plan_patientText">Plan in the patient's own words <span class="meta">(this is what the patient will see)</span></label><textarea id="plan_patientText" maxlength="400" style="min-height:80px"></textarea><div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap"><button class="button" data-save-plan="${t.id}">Save plan</button><button class="button secondary" data-cancel-plan>Cancel</button><span id="planResult" class="muted" role="status"></span></div></div><div class="plancontext"><h3>For reference</h3><small>Ideas the patient ticked</small><p>${ticked.length?ticked.map(k=>esc(strategyNames[k]||k)).join('<br>'):'None ticked for this barrier.'}</p>${t.ownWords&&t.ownWords.trim()?`<small>In the patient's own words</small><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Packet options for this barrier</small>${options}</div></div>`
+      const adjust = planFormMode === 'adjust' && t.plan;
+      const v = k => adjust ? esc(t.plan[k]) : '';
+      return `<div class="planform" id="planForm" data-task="${t.id}"><div class="planfields"><p class="muted" style="margin-top:0">${adjust?'Adjust the plan with the patient. The current version is kept in the history.':'Make this plan with the patient, not for them.'}</p>${PLAN_INPUTS.map(([k,label,hint])=>`<label for="plan_${k}">${label}</label><input id="plan_${k}" maxlength="400" placeholder="${esc(hint)}" value="${v(k)}">`).join('')}<label for="plan_patientText">Plan in the patient's own words <span class="meta">(this is what the patient will see)</span></label><textarea id="plan_patientText" maxlength="400" style="min-height:80px">${v('patientText')}</textarea><div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap"><button class="button" data-save-plan="${t.id}">${adjust?'Save adjusted plan':'Save plan'}</button><button class="button secondary" data-cancel-plan>Cancel</button><span id="planResult" class="muted" role="status"></span></div></div><div class="plancontext"><h3>For reference</h3><small>Ideas the patient ticked</small><p>${ticked.length?ticked.map(k=>esc(strategyNames[k]||k)).join('<br>'):'None ticked for this barrier.'}</p>${t.ownWords&&t.ownWords.trim()?`<small>In the patient's own words</small><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Packet options for this barrier</small>${options}</div></div>`
     }
 
     // One barrier task. showPatient: in the worklist, name the patient.
     function taskCard(t, showPatient) {
       const who = esc(t.patientName || 'Patient') + (t.patientLastInitial ? ' ' + esc(t.patientLastInitial) + '.' : '');
       const head = showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`;
-      const action = t.status === 'needs_plan' && planFormFor !== t.id ? `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}</div>${planFormFor===t.id?planForm(t):''}</div>`
+      const formOpen = planFormFor === t.id;
+      const action = formOpen ? '' : t.status === 'needs_plan' ?
+        `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
+        `<span class="muted">Check-back outcome:</span><button class="button small secondary" data-outcome="working" data-task="${t.id}">Working</button><button class="button small secondary" data-outcome="not_working" data-task="${t.id}">Not working</button><button class="button small secondary" data-adjust="${t.id}">Adjust</button>` :
+        '';
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
     }
 
     function stats() {
@@ -882,11 +920,37 @@
         render();
         return
       }
-      const makePlan = e.target.closest('[data-make-plan]');
+      const makePlan = e.target.closest('[data-make-plan],[data-adjust]');
       if (makePlan) {
-        planFormFor = Number(makePlan.dataset.makePlan);
+        planFormMode = makePlan.dataset.adjust ? 'adjust' : 'new';
+        planFormFor = Number(makePlan.dataset.makePlan || makePlan.dataset.adjust);
         render();
         el('plan_who')?.focus();
+        return
+      }
+      const outcomeBtn = e.target.closest('[data-outcome]');
+      if (outcomeBtn) {
+        const id = Number(outcomeBtn.dataset.task);
+        outcomeBtn.disabled = true;
+        try {
+          const r = await fetch('/api/tasks/' + id + '/outcome', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              outcome: outcomeBtn.dataset.outcome,
+              by: worklistRole !== 'all' ? worklistRole : undefined
+            })
+          });
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
+          await refresh();
+          render()
+        } catch (err) {
+          outcomeBtn.disabled = false;
+          const x = el('taskResult-' + id);
+          if (x) x.textContent = 'Could not save: ' + err.message
+        }
         return
       }
       if (e.target.closest('[data-cancel-plan]')) {
@@ -911,7 +975,8 @@
         }
         savePlanBtn.disabled = true;
         try {
-          const r = await fetch('/api/tasks/' + id + '/plan', {
+          if (planFormMode === 'adjust') body.outcome = 'adjust';
+          const r = await fetch('/api/tasks/' + id + (planFormMode === 'adjust' ? '/outcome' : '/plan'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

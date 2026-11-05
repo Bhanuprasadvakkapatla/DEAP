@@ -60,6 +60,12 @@ Patient data is saved to the browser's localStorage and synchronized to the SQLi
 
 Each barrier has a named owner (packet page 5), set in `BARRIER_OWNERS` in `server.py`. This mapping is site-specific; each center can change it. When a patient finishes the 14 BAT items, the server creates one open task per "yes" barrier in the `tasks` table (clinician-owned, separate from the patient's synced state). The clinician **My worklist** view shows open tasks for a chosen role ("Viewing as").
 
+### Plans and check-backs (MAPS steps 4–5)
+
+For each barrier task the owner agrees **one concrete plan** with the patient (who, what, how, where, when, plus the plan in the patient's own words, which is what the patient sees). Saving sets a check-back **14 days** later. When it is due, the patient is asked "Is your plan working?" and their answer appears on the task with their latest weekly Green/Yellow/Red answer. The owner then marks the plan **Working** (moves to *Keep checking*), **Not working** (plan closed and kept in history; the barrier needs a new plan) or **Adjust** (edited plan, history kept, new 14-day check-back). Plans, due dates and outcomes are clinician-owned and stored in the `tasks` and `plans` tables, never in the patient's synced state; every action is logged in the events table.
+
+- `DEAP_DURABILITY_DAYS` (default `30`): days until the next check-back after a plan is marked Working. Durability interval is a demo setting; the clinical team sets the real schedule.
+
 ### API
 
 - `GET /api/health`
@@ -67,7 +73,9 @@ Each barrier has a named owner (packet page 5), set in `BARRIER_OWNERS` in `serv
 - `GET /api/patients/{id}`
 - `PUT /api/patients/{id}` JSON `{ "state": {...} }`
 - `POST /api/patients/{id}/care-plan` JSON `{ "carePlan": "..." }`
-- `GET /api/tasks` — open follow-up tasks (one per "yes" barrier per assessment) and the list of owner roles
+- `GET /api/tasks` — follow-up tasks (one per "yes" barrier per assessment) with current plan, plan history and patient check-back answer, plus the list of owner roles
+- `POST /api/tasks/{id}/plan` JSON `{ "who", "what", "how", "where", "when", "patientText" }` — agree a plan
+- `POST /api/tasks/{id}/outcome` JSON `{ "outcome": "working" | "not_working" | "adjust" }` (adjust also takes the plan fields)
 - `POST /api/patients/{id}/requests` JSON `{ "action": "handled" }` — clinician marks open support requests handled (stored on the server, outside the patient's state)
 
 ### Demonstrate
