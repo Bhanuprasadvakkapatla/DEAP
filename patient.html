@@ -1431,6 +1431,10 @@
     deapBanner.textContent = 'Connecting to care-team demo…';
     document.body.appendChild(deapBanner);
 
+    // Shown when the care team has no follow-up note, in the patient's language.
+    const deapNoNote = () => s.lang === 'es' ? 'Tu equipo aún no ha agregado un mensaje.' :
+      'Your care team has not added a follow-up note yet.';
+
     function deapStatus(ok) {
       deapBanner.textContent = ok ? '● Connected to care-team demo' :
       '○ Offline — saved on this device';
@@ -1485,7 +1489,7 @@
         if (cp !== deapCarePlan) {
           deapCarePlan = cp;
           const el = document.getElementById('deapCarePlan');
-          if (el) el.textContent = cp || 'Your care team has not added a follow-up note yet.';
+          if (el) el.textContent = cp || deapNoNote();
         }
       } catch (e) {
         deapStatus(false)
@@ -1503,9 +1507,7 @@
             '<h3>Seguimiento del equipo</h3><p id="deapCarePlan"></p><p class="small">Para preguntas médicas, contacta a tu equipo de trasplante.</p>' :
             '<h3>Care-team follow-up</h3><p id="deapCarePlan"></p><p class="small">Updates from your care team appear here in this demo. For medical questions, contact your transplant team.</p>';
           screen.appendChild(box);
-          document.getElementById('deapCarePlan').textContent = deapCarePlan || (s.lang === 'es' ?
-            'Tu equipo aún no ha agregado un mensaje.' :
-            'Your care team has not added a follow-up note yet.');
+          document.getElementById('deapCarePlan').textContent = deapCarePlan || deapNoNote();
         }
       }
     };
