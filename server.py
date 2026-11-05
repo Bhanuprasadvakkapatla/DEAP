@@ -4,10 +4,13 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-import json, sqlite3, threading, re, os, argparse
+import json, sqlite3, threading, re, os, argparse, socket
 
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.environ.get("DEAP_DB", str(ROOT / "deap_demo.sqlite3")))
+# 127.0.0.1 = this computer only. 0.0.0.0 = also phones on the same network.
+HOST = os.environ.get("DEAP_HOST", "127.0.0.1")
+PORT = 8000
 CAREGIVER_HOURS = float(os.environ.get("DEAP_CAREGIVER_HOURS", "24"))
 CLINICIAN_HOURS = float(os.environ.get("DEAP_CLINICIAN_HOURS", "48"))
 if not 0 < CAREGIVER_HOURS < CLINICIAN_HOURS:
@@ -506,6 +509,19 @@ def reset_db():
     )
 
 
+def lan_address():
+    """This computer's address on the local network (no data is sent)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))
+            return s.getsockname()[0]
+    except OSError:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except OSError:
+            return "127.0.0.1"
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DEAP Connect synthetic local demo server")
     parser.add_argument(
@@ -520,6 +536,23 @@ if __name__ == "__main__":
         init()
     threading.Thread(target=escalation_worker, daemon=True).start()
     print(
-        "DEAP Connect synthetic demo: http://localhost:8000/clinician.html", flush=True
+        f"DEAP Connect synthetic demo: http://localhost:{PORT}/clinician.html",
+        flush=True,
     )
-    ThreadingHTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
+    if HOST == "0.0.0.0":
+        ip = lan_address()
+        if ip.startswith("127."):
+            print(
+                "Phone access is on, but the network address could not be found. Run ipconfig (Windows) or ifconfig (Mac/Linux) to find it.",
+                flush=True,
+            )
+        else:
+            print(
+                f"On a phone on the same Wi-Fi, open: http://{ip}:{PORT}/patient.html",
+                flush=True,
+            )
+        print(
+            "Warning: anyone on this network can open the demo (no login). Use fictional data only.",
+            flush=True,
+        )
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
