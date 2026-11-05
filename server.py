@@ -212,6 +212,50 @@ def init():
             sync_tasks(c, row["id"], json.loads(row["state"]))
         if fresh_seed:
             seed_plans(c)
+        # Chart data (demo only, no real EHR). Chart-owned: never part of the patient's state.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS chart_visits (patient_id TEXT PRIMARY KEY, last_visit TEXT NOT NULL, FOREIGN KEY(patient_id) REFERENCES patients(id))"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS labs (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, drawn_on TEXT NOT NULL, tacrolimus REAL NOT NULL, source TEXT NOT NULL DEFAULT 'demo seed', FOREIGN KEY(patient_id) REFERENCES patients(id))"
+        )
+        if c.execute("SELECT COUNT(*) FROM labs").fetchone()[0] == 0:
+            seed_chart(c)
+
+
+# Fictional chart data for the demo patients (no real EHR). Levels are tacrolimus in ng/mL.
+# Each: (patient, days since last clinic visit, [(days ago drawn, level), ...] newest first).
+SEED_CHART = {
+    "demo-01": (40, [(56, 7.2), (70, 6.9), (84, 7.3), (98, 7.0)]),  # Alex: no labs in over 6 weeks
+    "demo-02": (21, [(9, 6.6), (23, 6.9), (37, 6.4), (51, 6.8)]),
+    "demo-03": (35, [(12, 8.1), (26, 7.8), (40, 8.3), (54, 7.9)]),
+    "demo-04": (18, [(5, 7.4), (19, 7.1), (33, 7.6), (47, 7.2), (61, 7.5)]),
+    "demo-05": (28, [(6, 10.4), (20, 6.0), (34, 9.8), (48, 5.2)]),  # Riley: levels unsteady
+    "demo-06": (50, [(14, 6.2), (28, 6.5), (42, 6.1), (56, 6.4)]),
+    "demo-07": (33, [(10, 7.7), (24, 7.3), (38, 7.9), (52, 7.5)]),
+    "demo-08": (25, [(8, 6.9), (22, 7.2), (36, 6.7), (50, 7.0)]),
+    "demo-09": (60, [(15, 8.4), (29, 8.0), (43, 8.6), (57, 8.2)]),
+    "demo-10": (14, [(3, 7.0), (17, 7.3), (31, 6.8), (45, 7.1)]),
+    "demo-11": (30, [(7, 9.9), (21, 5.8), (35, 10.2), (49, 5.4)]),  # Drew: weekly Green, levels unsteady
+    "demo-12": (152, [(11, 7.5), (25, 7.2), (39, 7.6), (53, 7.3)]),  # Parker: no clinic visit in over 4 months
+}
+
+
+def seed_chart(c):
+    today = NOW().date()
+    have = {r["id"] for r in c.execute("SELECT id FROM patients")}
+    for pid, (visit_ago, draws) in SEED_CHART.items():
+        if pid not in have:
+            continue
+        c.execute(
+            "INSERT OR REPLACE INTO chart_visits(patient_id,last_visit) VALUES (?,?)",
+            (pid, (today - timedelta(days=visit_ago)).isoformat()),
+        )
+        for ago, level in draws:
+            c.execute(
+                "INSERT INTO labs(patient_id,drawn_on,tacrolimus) VALUES (?,?,?)",
+                (pid, (today - timedelta(days=ago)).isoformat(), level),
+            )
 
 
 # Fictional demo plans so the seed patients show every stage of the follow-up loop.
