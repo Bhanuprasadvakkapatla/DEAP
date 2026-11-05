@@ -366,7 +366,8 @@ def invite_view(c, inv):
     sharing = family_sharing(main, inv["leads"])
     who["sharing"] = sharing
     if owns_record(inv):
-        return {"invite": who, "patient": derive(prow, c)}
+        # ownState: this person's own saved answers, so a new device can pick them up.
+        return {"invite": who, "patient": derive(prow, c), "ownState": main}
     # Caregiver of a patient aged 10+ (proposed demo rules): never the patient's checklist
     # answers, own words, weekly ratings or check-back notes. Plans and the weekly colour only
     # when the patient shares them; check-back dates always.
@@ -374,6 +375,7 @@ def invite_view(c, inv):
     weekly = (main.get("weekly") or [None])[-1]
     return {
         "invite": who,
+        "ownState": caregiver_state(c, inv["family_id"]),
         "patient": {
             "plans": plans if sharing["plans"] else [],
             "checkbackDates": sorted(p["dueDate"] for p in plans if p["dueDate"]),

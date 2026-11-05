@@ -746,6 +746,14 @@
       null;
     const KEY = 'deap_patient_caregiver_v5' + (INVITE ? ':' + INVITE : '');
     // Who this link belongs to (from the server): person, names, age, language, who leads.
+    // Was anything saved in this browser for this link before the page opened?
+    const deapHadLocal = (() => {
+      try {
+        return !!localStorage.getItem(KEY)
+      } catch (e) {
+        return false
+      }
+    })();
     let deapInvite = null,
       // The patient-record part of what the server sent for this link (already filtered).
       deapView = null;
@@ -1738,9 +1746,15 @@
         const data = await r.json();
         deapStatus(true);
         if (INVITE) {
+          const first = !deapInvite;
           deapInvite = data.invite;
           deapView = data.patient;
-          deapApplyInvite(false)
+          // New device for this link: pick up this person's saved answers instead of overwriting them.
+          if (first && !deapHadLocal && data.ownState?.patientName) {
+            s = Object.assign(fresh(), data.ownState);
+            save();
+            render()
+          } else deapApplyInvite(false)
         }
         const cp = data.patient?.carePlan || '';
         if (cp !== deapCarePlan) {
