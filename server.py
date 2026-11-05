@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-import json, sqlite3, threading, re, os
+import json, sqlite3, threading, re, os, argparse
 
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.environ.get("DEAP_DB", str(ROOT / "deap_demo.sqlite3")))
@@ -493,8 +493,31 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json({"patient": derive(row, c)})
 
 
-if __name__ == "__main__":
+def reset_db():
+    """Delete the demo database (and SQLite side files) so init() re-creates fresh demo patients."""
+    existed = DB.exists()
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        Path(str(DB) + suffix).unlink(missing_ok=True)
     init()
+    print(
+        ("Demo database reset: deleted and re-created " if existed else "Demo database created: ")
+        + f"{DB} with 12 fresh demo patients (check-in times start from now).",
+        flush=True,
+    )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DEAP Connect synthetic local demo server")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="delete and re-create the demo database with fresh demo patients, then start",
+    )
+    args = parser.parse_args()
+    if args.reset:
+        reset_db()
+    else:
+        init()
     threading.Thread(target=escalation_worker, daemon=True).start()
     print(
         "DEAP Connect synthetic demo: http://localhost:8000/clinician.html", flush=True
