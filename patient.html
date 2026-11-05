@@ -981,6 +981,7 @@
       caregiverName: '',
       barriers: [],
       batAnswers: {},
+      batId: '',
       other: '',
       primary: '',
       strategies: [],
@@ -1285,6 +1286,8 @@
       if (bat) {
         const k = bat.dataset.bat,
           v = bat.dataset.ans;
+        // Marks which assessment these answers belong to (set on the first answer).
+        if (!s.batId) s.batId = new Date().toISOString();
         s.batAnswers[k] = v;
         // "Yes" answers are the patient's barriers, kept in BAT order.
         s.barriers = barrierKeys.filter(x => s.batAnswers[x] === 'yes');

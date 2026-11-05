@@ -56,6 +56,10 @@ On start, the server prints the address to open on the phone, for example `http:
 
 Patient data is saved to the browser's localStorage and synchronized to the SQLite backend. Clinician changes are fetched by the patient app every five seconds; the clinician portal refreshes every four seconds. Patient identities are anonymous demo IDs stored in the browser; multiple tabs of the same browser profile share the same demo patient identity. Separate browser profiles create separate patients.
 
+### Barrier owners and worklist
+
+Each barrier has a named owner (packet page 5), set in `BARRIER_OWNERS` in `server.py`. This mapping is site-specific; each center can change it. When a patient finishes the 14 BAT items, the server creates one open task per "yes" barrier in the `tasks` table (clinician-owned, separate from the patient's synced state). The clinician **My worklist** view shows open tasks for a chosen role ("Viewing as").
+
 ### API
 
 - `GET /api/health`
@@ -63,6 +67,7 @@ Patient data is saved to the browser's localStorage and synchronized to the SQLi
 - `GET /api/patients/{id}`
 - `PUT /api/patients/{id}` JSON `{ "state": {...} }`
 - `POST /api/patients/{id}/care-plan` JSON `{ "carePlan": "..." }`
+- `GET /api/tasks` — open follow-up tasks (one per "yes" barrier per assessment) and the list of owner roles
 - `POST /api/patients/{id}/requests` JSON `{ "action": "handled" }` — clinician marks open support requests handled (stored on the server, outside the patient's state)
 
 ### Demonstrate

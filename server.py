@@ -35,6 +35,27 @@ BAT_KEYS = (
 )
 # Allowed barrier codes: the 14 BAT items plus free-text "Something else".
 BARRIER_KEYS = BAT_KEYS + ("other",)
+
+# Who follows up on each barrier (packet page 5).
+# Site-specific; each center can change this.
+BARRIER_OWNERS = {
+    "forget": "Transplant coordinator",
+    "taste": "Transplant coordinator",
+    "swallow": "Transplant coordinator",
+    "side": "Transplant coordinator",
+    "embarrass": "Transplant coordinator",
+    "noneed": "Transplant coordinator",
+    "toomany": "Nephrologist / NP / Pharmacist",
+    "notwork": "Nephrologist / NP / Pharmacist",
+    "confusing": "Nephrologist / NP / Pharmacist",
+    "ranout": "Social worker",
+    "afford": "Social worker",
+    "activities": "Psychologist",
+    "refuse": "Psychologist",
+    "inconvenient": "Psychologist",
+    "other": "Transplant coordinator",  # to review and re-route
+}
+OWNER_ROLES = list(dict.fromkeys(BARRIER_OWNERS.values()))
 NOW = lambda: datetime.now(timezone.utc)
 
 
@@ -66,6 +87,11 @@ def init():
             c.execute(
                 "ALTER TABLE patients ADD COLUMN handled_requests INTEGER NOT NULL DEFAULT 0"
             )
+        # Clinician-owned follow-up tasks: one per "yes" barrier per assessment.
+        # plan, due_date and outcome are kept for later use.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, assessment TEXT NOT NULL, barrier TEXT NOT NULL, owner_role TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL, plan TEXT, due_date TEXT, outcome TEXT, UNIQUE(patient_id, assessment, barrier))"
+        )
         if c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0:
             # Fictional demo patients: (name, BAT "yes" barriers with the biggest first, weekly status)
             sample = [
@@ -95,6 +121,7 @@ def init():
                     "primary": barrier,
                     "barriers": [k for k in BARRIER_KEYS if k in yes],
                     "batAnswers": {k: "yes" if k in yes else "no" for k in BAT_KEYS},
+                    "batId": iso(NOW() - timedelta(days=3)),
                     "strategies": ["reminder"],
                     "plan": "Use a reminder with a routine",
                     "daily": [
@@ -125,6 +152,9 @@ def init():
                         0,
                     ),
                 )
+        # Create tasks for seed patients and for databases made before the tasks table existed.
+        for row in c.execute("SELECT id, state FROM patients").fetchall():
+            sync_tasks(c, row["id"], json.loads(row["state"]))
 
 
 def event(c, pid, kind, message):
@@ -132,6 +162,37 @@ def event(c, pid, kind, message):
         "INSERT INTO events(patient_id,kind,message,at) VALUES (?,?,?,?)",
         (pid, kind, message, iso()),
     )
+
+
+def sync_tasks(c, pid, state):
+    """Keep one task per "yes" barrier for the patient's current assessment.
+
+    Runs only once all 14 BAT items are answered. A barrier changed back to "no"
+    in the same assessment removes its task while it is still open.
+    """
+    answers = state.get("batAnswers") or {}
+    if not all(answers.get(k) in ("yes", "no") for k in BAT_KEYS):
+        return
+    assessment = state.get("batId") or "initial"
+    yes = [b for b in state.get("barriers", []) if b in BARRIER_OWNERS]
+    existing = {
+        r["barrier"]: r
+        for r in c.execute(
+            "SELECT id, barrier, status FROM tasks WHERE patient_id=? AND assessment=?",
+            (pid, assessment),
+        )
+    }
+    for b in yes:
+        if b not in existing:
+            c.execute(
+                "INSERT INTO tasks(patient_id,assessment,barrier,owner_role,status,created_at) VALUES (?,?,?,?,'open',?)",
+                (pid, assessment, b, BARRIER_OWNERS[b], iso()),
+            )
+            event(c, pid, "task_created", f"Task for {BARRIER_OWNERS[b]}: barrier '{b}'")
+    for b, r in existing.items():
+        if b not in yes and r["status"] == "open":
+            c.execute("DELETE FROM tasks WHERE id=?", (r["id"],))
+            event(c, pid, "task_removed", f"Patient changed '{b}' to No; open task removed")
 
 
 def derive(row, c):
@@ -187,6 +248,9 @@ def derive(row, c):
             + row["demo_offset_hours"],
         ),
         carePlan=row["care_plan"],
+        barrierOwners={
+            b: BARRIER_OWNERS[b] for b in state.get("barriers", []) if b in BARRIER_OWNERS
+        },
         handledRequests=handled,
         openRequests=open_requests,
         status=status,
@@ -254,6 +318,7 @@ def validate_state(state):
         "lang",
         "role",
         "primary",
+        "batId",
     ):
         if key in state and (not isinstance(state[key], str) or len(state[key]) > 1200):
             return "Invalid " + key
@@ -358,6 +423,29 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json(
                 {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False}
             )
+        if path == "/api/tasks":
+            with LOCK, conn() as c:
+                rows = c.execute(
+                    "SELECT t.*, p.state FROM tasks t JOIN patients p ON p.id = t.patient_id WHERE t.status='open' ORDER BY t.created_at, t.id"
+                ).fetchall()
+            tasks = []
+            for r in rows:
+                st = json.loads(r["state"])
+                tasks.append(
+                    {
+                        "id": r["id"],
+                        "patientId": r["patient_id"],
+                        "patientName": st.get("patientName", ""),
+                        "patientLastInitial": st.get("patientLastInitial", ""),
+                        "barrier": r["barrier"],
+                        "ownerRole": r["owner_role"],
+                        "status": r["status"],
+                        "createdAt": r["created_at"],
+                        # The patient's own words belong to the "Something else" task.
+                        "ownWords": st.get("other", "") if r["barrier"] == "other" else "",
+                    }
+                )
+            return self.json({"roles": OWNER_ROLES, "tasks": tasks})
         if path == "/api/patients" or (m and not m.group(2)):
             with LOCK, conn() as c:
                 if path == "/api/patients":
@@ -437,6 +525,8 @@ class Handler(SimpleHTTPRequestHandler):
                         "activity",
                         "Patient activity ended the previous non-response episode",
                     )
+            if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers", "batId")):
+                sync_tasks(c, pid, state)
             row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
             recalc(c, row)
             return self.json({"patient": derive(row, c)})
