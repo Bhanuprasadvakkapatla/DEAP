@@ -712,7 +712,6 @@
         schedule: 'My schedule changes a lot',
         other: 'Something else',
         otherPlaceholder: 'Tell us in your own words (optional)',
-        placeholder: 'Placeholder for the validated MAPS barrier list. The clinical team will provide the full list.',
         primaryTitle: 'Which is the biggest problem right now?',
         primaryDesc: 'Pick one. You know your day best.',
         strategyTitle: 'What might help?',
@@ -772,11 +771,8 @@
         noWeekly: 'No weekly check-in yet',
         barrierFocus: 'Your main challenge',
         strategies: 'Ideas you chose',
-        silence: 'Try the re-engagement demo',
-        simulate: 'Simulate 2 days without a reply',
         nudge: 'Gentle follow-up',
         nudgeText: 'We have not heard from you in a bit. Is there a better time to check in? You can change your preferences anytime.',
-        resetSilence: 'Clear simulated silence',
         settingsTitle: 'Your preferences',
         save: 'Save preferences',
         saved: 'Preferences saved',
@@ -797,7 +793,8 @@
         todayLogged: 'Checked in today',
         noData: 'Not yet',
         openWeekly: 'Do weekly check-in',
-        edit: 'Edit preferences'
+        edit: 'Edit preferences',
+        emergency: 'If someone is unconscious or unresponsive, call 911.'
       },
       es: {
         subtitle: 'Tu cuidado, a tu ritmo.',
@@ -828,7 +825,6 @@
         schedule: 'Mi horario cambia mucho',
         other: 'Otra cosa',
         otherPlaceholder: 'Cuéntanos con tus palabras (opcional)',
-        placeholder: 'Lista provisional. El equipo clínico dará la lista MAPS validada.',
         primaryTitle: '¿Cuál es el mayor problema ahora?',
         primaryDesc: 'Elige uno. Tú conoces mejor tu día.',
         strategyTitle: '¿Qué podría ayudarte?',
@@ -888,11 +884,8 @@
         noWeekly: 'Aún no hay respuesta semanal',
         barrierFocus: 'Tu mayor dificultad',
         strategies: 'Ideas que elegiste',
-        silence: 'Prueba la demostración de seguimiento',
-        simulate: 'Simular 2 días sin responder',
         nudge: 'Mensaje amable de seguimiento',
         nudgeText: 'Hace un tiempo que no sabemos de ti. ¿Hay un mejor momento para hablar? Puedes cambiar tus preferencias.',
-        resetSilence: 'Borrar simulación',
         settingsTitle: 'Tus preferencias',
         save: 'Guardar preferencias',
         saved: 'Preferencias guardadas',
@@ -913,7 +906,8 @@
         todayLogged: 'Ya respondiste hoy',
         noData: 'Todavía no',
         openWeekly: 'Responder por la semana',
-        edit: 'Cambiar preferencias'
+        edit: 'Cambiar preferencias',
+        emergency: 'Si alguien está inconsciente, llame al 911.'
       }
     };
     const fresh = () => ({
@@ -1006,7 +1000,7 @@
       if (step === 1) out += header('02 / 05', t('barrierTitle'), t('barrierDesc')) + choices(
         barrierKeys, s.barriers, true) + (s.barriers.includes('other') ?
         `<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>` :
-        '') + `<p class="small">${t('placeholder')}</p>`;
+        '');
       if (step === 2) out += header('03 / 05', t('primaryTitle'), t('primaryDesc')) + choices(s
         .barriers, s.primary, false);
       if (step === 3) out += header(s.barriers.length === 1 ? '03 / 04' : '04 / 05', t('strategyTitle'),
@@ -1057,13 +1051,13 @@
       }).join('');
       const last = s.weekly.at(-1);
       return header('YOUR JOURNEY', t('progressTitle'), t('progressDesc')) +
-        `<div class="statrow"><div class="stat"><strong>${takenDays}</strong><span>${t('daysSaid')} “${t('took')}” · ${t('last30')}</span></div><div class="stat miss"><strong>${missedDays}</strong><span>${t('daysSaid')} “${t('missed')}” · ${t('last30')}</span></div><div class="stat" style="grid-column:1/-1"><strong>${s.weekly.length}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div><div class="card"><h3>${t('silence')}</h3><p class="muted">${t('nudgeText')}</p>${btn(s.silence?t('resetSilence'):t('simulate'),'silence','secondary')}</div>` +
+        `<div class="statrow"><div class="stat"><strong>${takenDays}</strong><span>${t('daysSaid')} “${t('took')}” · ${t('last30')}</span></div><div class="stat miss"><strong>${missedDays}</strong><span>${t('daysSaid')} “${t('missed')}” · ${t('last30')}</span></div><div class="stat" style="grid-column:1/-1"><strong>${s.weekly.length}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
         foot()
     }
 
     function settings() {
       return header('YOUR SPACE', t('settingsTitle'), t('personalizeDesc')) +
-        `<div class="card"><label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div><div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>${btn(t('reset'),'reset','outline')}` +
+        `<div class="card"><label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div><div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
     }
 
@@ -1175,10 +1169,6 @@
         s.draftWeekly = '';
         s.draftNote = '';
         return go('weeklyDone')
-      }
-      if (a === 'silence') {
-        s.silence = !s.silence;
-        return go('progress')
       }
       if (a === 'savePrefs') {
         if (!s.patientName.trim()) return notice(t('nameRequired'));
@@ -1377,37 +1367,6 @@
         }
       } catch (e) {}
     };
-    const deapRenderBeforeEsc = render;
-    render = function() {
-      deapRenderBeforeEsc();
-      if (s.view === 'today' && s.patientName.trim()) {
-        const screen = document.getElementById('screen');
-        if (screen) {
-          const card = document.createElement('div');
-          card.className = 'card soft';
-          card.setAttribute('role', 'status');
-          const title = document.createElement('h3');
-          title.textContent = s.lang === 'es' ? 'Seguimiento de participación' :
-            'Engagement follow-up';
-          const info = document.createElement('p');
-          info.textContent = deapEscStage === 'clinician_review' ? (s.lang === 'es' ?
-              'No se registró una respuesta reciente. Se marcó para revisión del equipo (solo simulación).' :
-              'No recent response recorded. Flagged for care-team review (simulation only).') :
-            deapEscStage === 'caregiver_notice' ? (s.lang === 'es' ?
-              'Se simuló un aviso al cuidador; no se envió ningún mensaje.' :
-              'Caregiver notification simulated; no message was sent.') : (s.lang === 'es' ?
-              'No hay avisos pendientes por falta de respuesta.' : 'No overdue engagement notices.');
-          const disclaimer = document.createElement('p');
-          disclaimer.className = 'small';
-          disclaimer.textContent = s.lang === 'es' ?
-            'No responder no significa que se haya omitido una dosis. Si alguien está inconsciente, llame al 911.' :
-            'No response does not mean a dose was missed. If someone is unconscious or unresponsive, call 911.';
-          card.append(title, info, disclaimer);
-          screen.appendChild(card)
-        }
-      }
-    };
-    render();
   </script>
  </body>
 </html>
