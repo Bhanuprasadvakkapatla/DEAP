@@ -75,7 +75,7 @@ Patient data is saved to the browser's localStorage and synchronized to the SQLi
 
 ### Safety and limitations
 
-No authentication, authorization, transport security, auditing, HIPAA compliance, real SMS, EHR integration, or verified clinical assessment content. Do not deploy publicly or use real patient data. Barrier labels are demo placeholders, not the validated MAPS instrument. Status rules are illustrative workflow rules, not clinical risk scores. Clinician notes are demo messages, not medical instructions. Reset demo data by stopping the server and running `python server.py --reset`.
+No authentication, authorization, transport security, auditing, HIPAA compliance, real SMS, EHR integration, or verified clinical assessment content. Do not deploy publicly or use real patient data. Barriers use the 14-item Barriers Assessment Tool (BAT) from the Hackathon Builder Packet, as a Yes/No checklist, plus "Something else" in the patient's own words. Spanish BAT wording is a draft translation; replace with the clinical team's validated Spanish BAT. Status rules are illustrative workflow rules, not clinical risk scores. Clinician notes are demo messages, not medical instructions. Reset demo data by stopping the server and running `python server.py --reset`.
 
 ## Overdue Check-in & Escalation — engagement safety net (new)
 

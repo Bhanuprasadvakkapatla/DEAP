@@ -16,6 +16,25 @@ CLINICIAN_HOURS = float(os.environ.get("DEAP_CLINICIAN_HOURS", "48"))
 if not 0 < CAREGIVER_HOURS < CLINICIAN_HOURS:
     raise ValueError("Escalation thresholds must increase and be positive")
 LOCK = threading.RLock()
+# Barriers Assessment Tool (BAT): the 14 official items, in packet order.
+BAT_KEYS = (
+    "forget",
+    "taste",
+    "swallow",
+    "side",
+    "embarrass",
+    "noneed",
+    "toomany",
+    "notwork",
+    "confusing",
+    "ranout",
+    "afford",
+    "activities",
+    "refuse",
+    "inconvenient",
+)
+# Allowed barrier codes: the 14 BAT items plus free-text "Something else".
+BARRIER_KEYS = BAT_KEYS + ("other",)
 NOW = lambda: datetime.now(timezone.utc)
 
 
@@ -48,21 +67,23 @@ def init():
                 "ALTER TABLE patients ADD COLUMN handled_requests INTEGER NOT NULL DEFAULT 0"
             )
         if c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0:
+            # Fictional demo patients: (name, BAT "yes" barriers with the biggest first, weekly status)
             sample = [
-                ("Alex", "schedule", "yellow"),
-                ("Jordan", "forget", "green"),
-                ("Taylor", "activities", "red"),
-                ("Sam", "swallow", "green"),
-                ("Riley", "side", "yellow"),
-                ("Morgan", "forget", "green"),
-                ("Casey", "schedule", "yellow"),
-                ("Avery", "taste", "green"),
-                ("Jamie", "forget", "red"),
-                ("Cameron", "activities", "green"),
-                ("Drew", "schedule", "green"),
-                ("Parker", "side", "yellow"),
+                ("Alex", ["toomany"], "yellow"),
+                ("Jordan", ["forget"], "green"),
+                ("Taylor", ["refuse"], "red"),
+                ("Sam", ["swallow", "taste"], "green"),
+                ("Riley", ["side"], "yellow"),
+                ("Morgan", ["embarrass", "forget"], "green"),
+                ("Casey", ["ranout"], "yellow"),
+                ("Avery", ["taste"], "green"),
+                ("Jamie", ["afford", "ranout"], "red"),
+                ("Cameron", ["activities", "inconvenient"], "green"),
+                ("Drew", ["confusing", "notwork"], "green"),
+                ("Parker", ["noneed"], "yellow"),
             ]
-            for i, (name, barrier, status) in enumerate(sample):
+            for i, (name, yes, status) in enumerate(sample):
+                barrier = yes[0]
                 state = {
                     "patientName": name,
                     "patientLastInitial": chr(65 + i),
@@ -72,7 +93,8 @@ def init():
                     "channel": "SMS",
                     "time": "07:00",
                     "primary": barrier,
-                    "barriers": [barrier],
+                    "barriers": [k for k in BARRIER_KEYS if k in yes],
+                    "batAnswers": {k: "yes" if k in yes else "no" for k in BAT_KEYS},
                     "strategies": ["reminder"],
                     "plan": "Use a reminder with a routine",
                     "daily": [
@@ -133,7 +155,11 @@ def derive(row, c):
     last = state.get("weekly") or []
     status = (
         "blue"
+        # Awaiting assessment: no barriers yet and the 14 BAT items are not all answered.
         if not state.get("barriers")
+        and not all(
+            (state.get("batAnswers") or {}).get(k) in ("yes", "no") for k in BAT_KEYS
+        )
         else (
             "red"
             if open_requests
@@ -236,6 +262,14 @@ def validate_state(state):
             not isinstance(x, str) for x in state.get(key, [])
         ):
             return "Invalid " + key
+    barriers = state.get("barriers", [])
+    if any(b not in BARRIER_KEYS for b in barriers) or len(set(barriers)) != len(barriers):
+        return "Unknown barrier code"
+    answers = state.get("batAnswers", {})
+    if not isinstance(answers, dict) or any(
+        k not in BARRIER_KEYS or v not in ("yes", "no") for k, v in answers.items()
+    ):
+        return "Invalid batAnswers"
     if state.get("primary") and state["primary"] not in state.get("barriers", []):
         return "Primary barrier must be selected"
     for key in ("daily", "weekly"):

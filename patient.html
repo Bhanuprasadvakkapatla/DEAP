@@ -301,6 +301,51 @@
       color: #128367
     }
 
+    .batrow {
+      background: white;
+      border: 1.5px solid #dbe5e6;
+      border-radius: 13px;
+      padding: 13px;
+      margin: 9px 0
+    }
+
+    .batrow.missing {
+      border-color: #e0a54a;
+      background: #fffaf0
+    }
+
+    .batq {
+      color: #244253;
+      font-weight: 650;
+      line-height: 1.4
+    }
+
+    .yn {
+      display: flex;
+      gap: 9px;
+      margin-top: 10px
+    }
+
+    .ynbtn {
+      flex: 1;
+      min-height: 48px;
+      border: 1.5px solid #c8d8da;
+      border-radius: 11px;
+      background: white;
+      color: #204e60;
+      font-weight: 800
+    }
+
+    .ynbtn[aria-pressed=true] {
+      background: #e8f6f0;
+      border-color: #0e866a;
+      color: #0b654f
+    }
+
+    .batrow .field {
+      margin-top: 10px
+    }
+
     .field {
       width: 100%;
       border: 1px solid #c8d8da;
@@ -673,7 +718,11 @@
   <script>
     'use strict';
     const KEY = 'deap_patient_caregiver_v5';
-    const barrierKeys = ['forget', 'taste', 'swallow', 'side', 'activities', 'schedule', 'other'];
+    // Barriers Assessment Tool (BAT), 14 items in packet order, then "Something else".
+    const batKeys = ['forget', 'taste', 'swallow', 'side', 'embarrass', 'noneed', 'toomany', 'notwork',
+      'confusing', 'ranout', 'afford', 'activities', 'refuse', 'inconvenient'
+    ];
+    const barrierKeys = [...batKeys, 'other'];
     const strategyKeys = ['reminder', 'routine', 'cue', 'trusted'];
     const T = {
       en: {
@@ -696,13 +745,24 @@
         caregiver: 'I am answering for my child',
         careNote: 'You can share what you notice. Your child should have a voice in their care plan, too.',
         barrierTitle: 'What makes medicine hard?',
-        barrierDesc: 'Pick any that feel true for you. It is okay to pick more than one.',
-        forget: 'I forget',
-        taste: 'I do not like the taste',
-        swallow: 'The pills are hard to swallow',
-        side: 'I do not like the side effects',
-        activities: 'Other activities get in the way',
-        schedule: 'My schedule changes a lot',
+        barrierDesc: 'For each one, tap Yes if it is true for you, or No if it is not.',
+        yes: 'Yes',
+        no: 'No',
+        answerAll: 'Please answer Yes or No for each one.',
+        forget: 'Forgetting to take them or bring them with you',
+        taste: 'Hate the taste',
+        swallow: 'Hard to swallow pills',
+        side: 'Side effects (e.g., nausea, constipation)',
+        embarrass: "I don't want others to know I take medicine",
+        noneed: "I don't need the medicine",
+        toomany: 'Too many medicines or too many times a day',
+        notwork: 'The medicine does not work',
+        confusing: 'Difficult to understand medication instructions',
+        ranout: 'Ran out of medicine',
+        afford: "Can't afford the medicine",
+        activities: 'Gets in the way of other activities',
+        refuse: 'Refuse to take them',
+        inconvenient: 'Inconvenient',
         other: 'Something else',
         otherPlaceholder: 'Tell us in your own words (optional)',
         primaryTitle: 'Which is the biggest problem right now?',
@@ -776,7 +836,6 @@
         smsButton: 'Open secure demo link',
         privacy: 'Demo only. No account, real SMS, or medical records.',
         footer: 'Pre-pilot prototype with sample data. Not for clinical use.',
-        choose: 'Please select at least one option.',
         chooseOne: 'Please choose one option.',
         requestSaved: 'Care-team contact request saved in demo.',
         shiftLabel: 'Use a flexible time',
@@ -809,13 +868,24 @@
         caregiver: 'Respondo por mi hijo o hija',
         careNote: 'Puedes compartir lo que notas. Tu hijo o hija también debe participar en su plan.',
         barrierTitle: '¿Qué hace difícil tomar tu medicina?',
-        barrierDesc: 'Elige todas las opciones que te pasen. Puedes elegir varias.',
-        forget: 'Se me olvida',
-        taste: 'No me gusta el sabor',
+        barrierDesc: 'En cada una, toca Sí si te pasa, o No si no te pasa.',
+        yes: 'Sí',
+        no: 'No',
+        answerAll: 'Responde Sí o No en cada una.',
+        forget: 'Se me olvida tomarlas o llevarlas conmigo',
+        taste: 'Odio el sabor',
         swallow: 'Me cuesta tragar las pastillas',
-        side: 'No me gustan los efectos secundarios',
-        activities: 'Otras actividades se interponen',
-        schedule: 'Mi horario cambia mucho',
+        side: 'Efectos secundarios (por ejemplo, náuseas o estreñimiento)',
+        embarrass: 'No quiero que otros sepan que tomo medicina',
+        noneed: 'No necesito la medicina',
+        toomany: 'Son muchas medicinas o muchas veces al día',
+        notwork: 'La medicina no funciona',
+        confusing: 'Es difícil entender las instrucciones de la medicina',
+        ranout: 'Se me acabó la medicina',
+        afford: 'No puedo pagar la medicina',
+        activities: 'No me deja hacer otras actividades',
+        refuse: 'Me niego a tomarlas',
+        inconvenient: 'Es poco práctico',
         other: 'Otra cosa',
         otherPlaceholder: 'Cuéntanos con tus palabras (opcional)',
         primaryTitle: '¿Cuál es el mayor problema ahora?',
@@ -889,7 +959,6 @@
         smsButton: 'Abrir enlace de demostración',
         privacy: 'Solo demostración. Sin cuenta, SMS reales ni datos médicos.',
         footer: 'Prototipo previo al piloto con datos de ejemplo. No es para uso clínico.',
-        choose: 'Elige al menos una opción.',
         chooseOne: 'Elige una opción.',
         requestSaved: 'Solicitud guardada en la demostración.',
         shiftLabel: 'Usar un horario flexible',
@@ -911,6 +980,7 @@
       patientName: '',
       caregiverName: '',
       barriers: [],
+      batAnswers: {},
       other: '',
       primary: '',
       strategies: [],
@@ -931,7 +1001,13 @@
     } catch (e) {
       s = fresh()
     };
+    // Older saves may hold barrier codes that are no longer on the list; keep only official ones.
+    if (!s.batAnswers || typeof s.batAnswers !== 'object' || Array.isArray(s.batAnswers)) s.batAnswers = {};
+    s.barriers = (Array.isArray(s.barriers) ? s.barriers : []).filter(k => barrierKeys.includes(k));
+    if (!s.barriers.includes(s.primary)) s.primary = s.barriers.length === 1 ? s.barriers[0] : '';
     let toast = '';
+    // Set after a Continue tap with unanswered BAT items, to highlight them.
+    let batTried = false;
     const t = k => T[s.lang][k] || k;
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({
       '&': '&amp;',
@@ -978,27 +1054,38 @@
         .lang === 'es' ? 'Tu rutina: ' : 'Your routine: ') + s.routine + '.' : '')
     }
 
+    // Onboarding steps that apply: 0 who, 1 BAT, 2 biggest problem (2+ yes), 3 ideas, 4 preferences.
+    function onboardSteps() {
+      return [0, 1, ...(s.barriers.length > 1 ? [2] : []), ...(s.barriers.length ? [3] : []), 4];
+    }
+
+    const batUnanswered = () => batKeys.filter(k => !['yes', 'no'].includes(s.batAnswers[k]));
+
+    function batList() {
+      return `<div class="batlist">${barrierKeys.map(k=>{const a=s.batAnswers[k];const missing=batTried&&k!=='other'&&!a;return `<div class="batrow${missing?' missing':''}" role="group" aria-labelledby="bat-${k}"><div class="batq" id="bat-${k}">${esc(t(k))}</div><div class="yn">${['yes','no'].map(v=>`<button class="ynbtn" data-bat="${k}" data-ans="${v}" aria-pressed="${a===v}">${t(v)}</button>`).join('')}</div>${k==='other'&&a==='yes'?`<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>`:''}</div>`}).join('')}</div>`
+    }
+
     function onboarding() {
+      const steps = onboardSteps();
+      if (!steps.includes(s.step)) s.step = steps.find(x => x >= s.step) ?? 4;
       const step = s.step;
-      const displayStep = step > 2 && s.barriers.length === 1 ? step : step + 1;
-      const totalSteps = s.barriers.length === 1 && step > 1 ? 4 : 5;
+      const displayStep = steps.indexOf(step) + 1;
+      const totalSteps = steps.length;
+      const eyebrow = `${String(displayStep).padStart(2,'0')} / ${String(totalSteps).padStart(2,'0')}`;
       let out =
         `<div class="step">${t('step')} ${displayStep} / ${totalSteps}</div><div class="progressbar"><div style="width:${displayStep/totalSteps*100}%"></div></div>`;
-      if (step === 0) out += header('01 / 05', t('role'), t('careNote')) + choices(['self',
+      if (step === 0) out += header(eyebrow, t('role'), t('careNote')) + choices(['self',
           'caregiver'], s.role, false) +
         `<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" autocomplete="off" value="${esc(s.patientName)}" placeholder="${esc(t('patientNameLabel'))}">` +
         (s.role === 'caregiver' ?
           `<label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" autocomplete="off" value="${esc(s.caregiverName)}" placeholder="${esc(t('caregiverNameLabel'))}">` :
           '') + `<p class="small">${t('nameHint')}</p>`;
-      if (step === 1) out += header('02 / 05', t('barrierTitle'), t('barrierDesc')) + choices(
-        barrierKeys, s.barriers, true) + (s.barriers.includes('other') ?
-        `<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>` :
-        '');
-      if (step === 2) out += header('03 / 05', t('primaryTitle'), t('primaryDesc')) + choices(s
+      if (step === 1) out += header(eyebrow, t('barrierTitle'), t('barrierDesc')) + batList();
+      if (step === 2) out += header(eyebrow, t('primaryTitle'), t('primaryDesc')) + choices(s
         .barriers, s.primary, false);
-      if (step === 3) out += header(s.barriers.length === 1 ? '03 / 04' : '04 / 05', t('strategyTitle'),
+      if (step === 3) out += header(eyebrow, t('strategyTitle'),
         t('strategyDesc')) + choices(strategyKeys, s.strategies, true);
-      if (step === 4) out += header(s.barriers.length === 1 ? '04 / 04' : '05 / 05', t('personalize'),
+      if (step === 4) out += header(eyebrow, t('personalize'),
           t('personalizeDesc')) + prefs() +
         `<div class="card soft"><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div></div>`;
       out +=
@@ -1097,7 +1184,8 @@
       s.view = view;
       save();
       render();
-      document.querySelector('.screen')?.scrollTo(0, 0)
+      document.querySelector('.screen')?.scrollTo(0, 0);
+      window.scrollTo(0, 0)
     }
 
     function handleAction(a) {
@@ -1107,25 +1195,30 @@
         return go('onboard')
       }
       if (a === 'back') {
-        s.step = s.step === 3 && s.barriers.length === 1 ? 1 : Math.max(0, s.step - 1);
+        const steps = onboardSteps();
+        s.step = steps[Math.max(0, steps.indexOf(s.step) - 1)];
         return go('onboard')
       }
       if (a === 'next') {
         if (s.step === 0 && !s.patientName.trim()) return notice(t('nameRequired'));
         if (s.step === 0 && s.role === 'caregiver' && !s.caregiverName.trim()) return notice(t(
           'caregiverRequired'));
-        if (s.step === 1 && !s.barriers.length) return notice(t('choose'));
-        if (s.step === 2 && !s.primary) return notice(t('chooseOne'));
-        if (s.step === 1 && s.barriers.length === 1) {
-          s.primary = s.barriers[0];
-          s.step = 3;
-          return go('onboard')
+        if (s.step === 1 && batUnanswered().length) {
+          batTried = true;
+          notice(t('answerAll'));
+          document.querySelector('.batrow.missing')?.scrollIntoView({
+            block: 'center'
+          });
+          return
         }
+        if (s.step === 1) batTried = false;
+        if (s.step === 2 && !s.primary) return notice(t('chooseOne'));
         if (s.step === 4) {
           s.plan = s.strategies.map(k => t(k)).join(' + ') || t('planDefault');
           return go('today')
         }
-        s.step++;
+        const steps = onboardSteps();
+        s.step = steps[steps.indexOf(s.step) + 1];
         return go('onboard')
       }
       if (a === 'took') {
@@ -1188,15 +1281,26 @@
         handleAction(a.dataset.action);
         return
       }
+      const bat = e.target.closest('[data-bat]');
+      if (bat) {
+        const k = bat.dataset.bat,
+          v = bat.dataset.ans;
+        s.batAnswers[k] = v;
+        // "Yes" answers are the patient's barriers, kept in BAT order.
+        s.barriers = barrierKeys.filter(x => s.batAnswers[x] === 'yes');
+        s.primary = s.barriers.length === 1 ? s.barriers[0] : (s.barriers.includes(s.primary) ? s
+          .primary : '');
+        save();
+        render();
+        document.querySelector(`[data-bat="${k}"][data-ans="${v}"]`)?.focus();
+        return
+      }
       const pick = e.target.closest('[data-pick]');
       if (pick) {
         const k = pick.dataset.pick;
         if (pick.dataset.multi === '1') {
-          const arr = s.step === 1 ? s.barriers : s.strategies;
-          s.step === 1 || s.step === 3 ? arr.includes(k) ? arr.splice(arr.indexOf(k), 1) : arr.push(
-            k) : null;
-          if (s.step === 1) s.primary = s.barriers.length === 1 ? s.barriers[0] : (s.barriers
-            .includes(s.primary) ? s.primary : '')
+          if (s.step === 3) s.strategies.includes(k) ? s.strategies.splice(s.strategies.indexOf(k), 1) : s
+            .strategies.push(k)
         } else if (s.view === 'weekly') s.draftWeekly = k;
         else if (s.view === 'settings') s.role = k;
         else if (s.step === 0) s.role = k;

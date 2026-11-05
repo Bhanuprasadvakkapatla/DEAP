@@ -538,14 +538,23 @@
       '"': '&quot;',
       "'": '&#39;'
     } [c]));
+    // Barriers Assessment Tool (BAT) wording, same as patient.html (keep in sync).
     const names = {
-      forget: 'Forgetting',
-      taste: 'Taste',
-      swallow: 'Swallowing',
-      side: 'Side effects',
-      activities: 'Activities',
-      schedule: 'Changing schedule',
-      other: 'Other'
+      forget: 'Forgetting to take them or bring them with you',
+      taste: 'Hate the taste',
+      swallow: 'Hard to swallow pills',
+      side: 'Side effects (e.g., nausea, constipation)',
+      embarrass: "I don't want others to know I take medicine",
+      noneed: "I don't need the medicine",
+      toomany: 'Too many medicines or too many times a day',
+      notwork: 'The medicine does not work',
+      confusing: 'Difficult to understand medication instructions',
+      ranout: 'Ran out of medicine',
+      afford: "Can't afford the medicine",
+      activities: 'Gets in the way of other activities',
+      refuse: 'Refuse to take them',
+      inconvenient: 'Inconvenient',
+      other: 'Something else'
     };
     // Same English wording the patient sees in patient.html (keep in sync).
     const strategyNames = {
@@ -604,7 +613,7 @@
         patient: p.patientName
       }))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
       return stats() +
-        `<div class="detail"><div class="panel"><h2>Reported barrier prevalence</h2><p class="muted">Counts from fictional demo patients only; not clinical research.</p><div class="bars">${ranked.map(([k,n])=>`<div class="barrow"><span>${esc(names[k]||k)}</span><div class="track"><div class="fill" style="width:${100*n/total}%"></div></div><strong>${n}</strong></div>`).join('')}</div></div><div class="panel"><h2>Recent weekly responses</h2><div class="list">${recent.map(x=>`<div class="item"><strong>${esc(x.patient)} · ${esc(x.status.toUpperCase())}</strong><small>${shortDate(x.date)}</small></div>`).join('')}</div></div></div><div class="panel"><h2>Strategy use (synthetic cohort)</h2><div class="bars">${Object.keys(strategyNames).map(k=>{const n=patients.filter(p=>(p.strategies||[]).includes(k)).length;return `<div class="barrow wide"><span>${esc(strategyNames[k])}</span><div class="track"><div class="fill" style="width:${100*n/total}%"></div></div><strong>${n}</strong></div>`}).join('')}</div><p class="muted">These figures show selections, not proven intervention effectiveness.</p></div>`
+        `<div class="detail"><div class="panel"><h2>Reported barrier prevalence</h2><p class="muted">Counts from fictional demo patients only; not clinical research.</p><div class="bars">${ranked.map(([k,n])=>`<div class="barrow wide"><span>${esc(names[k]||k)}</span><div class="track"><div class="fill" style="width:${100*n/total}%"></div></div><strong>${n}</strong></div>`).join('')}</div></div><div class="panel"><h2>Recent weekly responses</h2><div class="list">${recent.map(x=>`<div class="item"><strong>${esc(x.patient)} · ${esc(x.status.toUpperCase())}</strong><small>${shortDate(x.date)}</small></div>`).join('')}</div></div></div><div class="panel"><h2>Strategy use (synthetic cohort)</h2><div class="bars">${Object.keys(strategyNames).map(k=>{const n=patients.filter(p=>(p.strategies||[]).includes(k)).length;return `<div class="barrow wide"><span>${esc(strategyNames[k])}</span><div class="track"><div class="fill" style="width:${100*n/total}%"></div></div><strong>${n}</strong></div>`}).join('')}</div><p class="muted">These figures show selections, not proven intervention effectiveness.</p></div>`
     }
 
     function guide() {
