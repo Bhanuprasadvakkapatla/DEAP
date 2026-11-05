@@ -343,6 +343,29 @@
       margin-top: 4px
     }
 
+    table.levels {
+      min-width: 0;
+      max-width: 340px;
+      margin: 6px 0
+    }
+
+    table.levels td,
+    table.levels th {
+      padding: 7px 10px
+    }
+
+    .chartflag {
+      font-weight: 700
+    }
+
+    .mismatch {
+      background: #f2f6fa;
+      border-left: 4px solid #8aa6bd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 12px 0 0
+    }
+
     .democlock {
       display: flex;
       gap: 10px;
@@ -789,6 +812,15 @@
       return `<div class="patientctx">${ans}${wk}</div>`
     }
 
+    const MISMATCH = "Check-in and chart don't match — worth reviewing together.";
+    // Chart signals for the care team (demo data, no real EHR). No target range; never high/low.
+    function chartPanel(p) {
+      const ch = p.chart;
+      if (!ch) return '';
+      const levels = ch.recentLevels.length ? `<table class="levels"><thead><tr><th>Draw date</th><th>Tacrolimus (ng/mL)</th></tr></thead><tbody>${ch.recentLevels.map(x=>`<tr><td>${esc(shortDate(x.date+'T12:00:00'))}</td><td>${esc(x.level)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No lab draws on record.</p>';
+      return `<div class="panel full" id="chartPanel"><h2>Chart signals <span class="pill">Demo — no real EHR</span></h2>${ch.hasData?`<div class="detail"><div><small class="muted">Last ${ch.recentLevels.length} level${ch.recentLevels.length===1?'':'s'}</small>${levels}<p class="muted" id="chartSpread">Spread (standard deviation) of last 4: ${ch.spread===null?'needs 4 draws':esc(ch.spread.toFixed(1))}</p></div><div class="list"><div class="item"><small>Last clinic visit</small><strong>${esc(ch.lastVisit?shortDate(ch.lastVisit+'T12:00:00'):'None on record')}</strong></div><div class="item"><small>Last lab</small><strong>${esc(ch.lastLab?shortDate(ch.lastLab+'T12:00:00'):'None on record')}</strong></div></div></div>`:'<p class="muted">No chart data for this patient.</p>'}<div class="list" id="chartFlags" style="margin-top:12px">${ch.flags.length?ch.flags.map(f=>`<div class="item chartflag">${esc(f.text)}</div>`).join(''):'<p class="muted">No chart flags.</p>'}</div>${p.chartMismatch?`<p class="mismatch" id="chartMismatch">${MISMATCH}</p>`:''}${ch.flags.length?'<p class="muted">For review at the weekly team meeting.</p>':''}</div>`
+    }
+
     function planSummary(pl) {
       return `<div class="plansum">${PLAN_INPUTS.map(([k,label])=>`<div><small>${label}</small> ${esc(pl[k])}</div>`).join('')}<div class="patientsees"><small>Patient sees</small><div class="ownwords">${esc(pl.patientText)}</div></div><div class="meta">Agreed ${esc(longDate(pl.createdAt))} · ${esc(pl.createdBy)}</div></div>`
     }
@@ -836,7 +868,7 @@
       const w = p.weekly || [],
         last = w.at(-1),
         daily = p.daily || [];
-      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div><div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Demo only. Moves this patient's check-back clock so check-backs come due; real time is not changed.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
+      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div>${chartPanel(p)}<div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Demo only. Moves this patient's check-back clock so check-backs come due; real time is not changed.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
     }
 
     function reports() {
@@ -912,7 +944,18 @@
       byGroup.needs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       const needYou = byGroup.overdue.length + byGroup.today.length + byGroup.needs.length;
       const shown = GROUPS.filter(([g]) => byGroup[g].length && (g !== 'later' || showAllTasks));
-      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${shown.length?shown.map(([g,label])=>`<div class="taskgroup" data-group="${g}"><h3>${label} <span class="muted">(${byGroup[g].length})</span></h3><div class="list">${byGroup[g].map(x=>taskCard(x, true)).join('')}</div></div>`).join(''):'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
+      const section = ([g, label]) =>
+        `<div class="taskgroup" data-group="${g}"><h3>${label} <span class="muted">(${byGroup[g].length})</span></h3><div class="list">${byGroup[g].map(x=>taskCard(x, true)).join('')}</div></div>`;
+      // Chart flags are for the weekly team meeting (packet MAPS step 1): Transplant coordinator and All only.
+      const flagged = role === 'all' || role === 'Transplant coordinator' ? patients.filter(p => p.chart?.flags?.length) : [];
+      const chartRow = p =>
+        `<div class="item chartrow" data-chart-patient="${esc(p.id)}"><strong>${patientName(p)}</strong>${p.chart.flags.map(f=>`<div>${esc(f.text)}</div>`).join('')}<div class="nextaction">→ Review at weekly team meeting</div>${p.chartMismatch?`<div class="mismatch">${MISMATCH}</div>`:''}<div style="margin-top:6px"><button class="link" data-open="${esc(p.id)}">View patient →</button></div></div>`;
+      const chartGroup = flagged.length ?
+        `<div class="taskgroup" data-group="chart"><h3>Chart flags — for team review <span class="muted">(${flagged.length})</span></h3><div class="list">${flagged.map(chartRow).join('')}</div></div>` :
+        '';
+      const body = shown.filter(([g]) => ['overdue', 'today', 'needs'].includes(g)).map(section).join('') + chartGroup +
+        shown.filter(([g]) => ['coming', 'later'].includes(g)).map(section).join('');
+      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
     }
 
     function guide() {

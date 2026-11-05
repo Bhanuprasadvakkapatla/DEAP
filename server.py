@@ -527,7 +527,8 @@ def acting_role(data):
     return (by if by in OWNER_ROLES else "Clinician portal") + " (demo, no login)"
 
 
-def derive(row, c):
+def derive(row, c, chart=False):
+    """One patient record. chart=True only for the care team: chart signals never go to the patient app."""
     state = json.loads(row["state"])
     pid = row["id"]
     er = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
@@ -566,10 +567,25 @@ def derive(row, c):
     rank = {"blue": 0, "green": 1, "yellow": 2, "red": 3}
     if overdue and rank[overdue] > rank[status]:
         status = overdue
+    extra = {}
+    if chart:
+        signals = chart_signals(c, pid)
+        latest = (state.get("weekly") or [{}])[-1].get("status")
+        if signals["flags"]:
+            reasons.append("Chart flag for team review")
+            # A chart flag raises the status to at least yellow, never lowers it.
+            if rank[status] < rank["yellow"]:
+                status = "yellow"
+        extra = {
+            "chart": signals,
+            # Latest weekly answer is Green but the chart has a flag.
+            "chartMismatch": bool(signals["flags"]) and latest == "green",
+        }
     # Start from the patient's state, then let server-owned fields overwrite any key with
     # the same name (a patient state can never fake or break these).
     return {
         **state,
+        **extra,
         **dict(
         id=pid,
         attentionReasons=reasons,
@@ -808,7 +824,8 @@ class Handler(SimpleHTTPRequestHandler):
             rows = c.execute("SELECT * FROM patients").fetchall()
             for row in rows:
                 recalc(c, row)
-            return {"patients": [derive(row, c) for row in rows]}, 200
+            # The patient list is the care-team view: include chart signals.
+            return {"patients": [derive(row, c, chart=True) for row in rows]}, 200
         row = c.execute("SELECT * FROM patients WHERE id=?", (m.group(1),)).fetchone()
         if not row:
             return {"error": "Not found"}, 404
