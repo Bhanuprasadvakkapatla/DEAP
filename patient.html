@@ -857,10 +857,10 @@
         plan: 'Mi plan acordado',
         planDefault: 'Habla con tu equipo para crear un plan que funcione para ti.',
         took: 'Tomé mi medicina',
-        missed: 'Olvidé una dosis',
+        missed: 'No tomé una dosis',
         done: 'Gracias por responder',
         doneSub: 'Tu respuesta se guardó en este dispositivo.',
-        missTitle: '¿Olvidaste una dosis?',
+        missTitle: '¿No tomaste una dosis?',
         missText: 'Puede pasar. No adivines qué hacer. Habla con tu equipo de trasplante para recibir instrucciones sobre tu medicina.',
         contact: 'Pedir un mensaje a mi equipo',
         contactDone: 'Tu solicitud se guardó en esta demostración. No se envió ningún mensaje real.',
@@ -907,7 +907,7 @@
         noData: 'Todavía no',
         openWeekly: 'Responder por la semana',
         edit: 'Cambiar preferencias',
-        emergency: 'Si alguien está inconsciente, llame al 911.'
+        emergency: 'Si alguien está inconsciente o no responde, llama al 911.'
       }
     };
     const fresh = () => ({
@@ -1332,11 +1332,11 @@
           const box = document.createElement('div');
           box.className = 'card soft';
           box.innerHTML = s.lang === 'es' ?
-            '<h3>Seguimiento del equipo</h3><p id="deapCarePlan"></p><p class="small">Para preguntas médicas, contacte a su equipo de trasplante.</p>' :
+            '<h3>Seguimiento del equipo</h3><p id="deapCarePlan"></p><p class="small">Para preguntas médicas, contacta a tu equipo de trasplante.</p>' :
             '<h3>Care-team follow-up</h3><p id="deapCarePlan"></p><p class="small">Updates from your care team appear here in this demo. For medical questions, contact your transplant team.</p>';
           screen.appendChild(box);
           document.getElementById('deapCarePlan').textContent = deapCarePlan || (s.lang === 'es' ?
-            'Su equipo aún no ha agregado un mensaje.' :
+            'Tu equipo aún no ha agregado un mensaje.' :
             'Your care team has not added a follow-up note yet.');
         }
       }
