@@ -322,6 +322,76 @@
       overflow-wrap: anywhere
     }
 
+    .plansum {
+      display: grid;
+      gap: 4px;
+      margin: 10px 0 4px;
+      padding: 10px 12px;
+      background: #f6fafb;
+      border-radius: 10px;
+      font-size: 14px
+    }
+
+    .plansum small,
+    .plancontext small {
+      color: #688090;
+      font-weight: 700;
+      margin-right: 4px
+    }
+
+    .patientsees {
+      margin-top: 4px
+    }
+
+    .planform {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e7edf2
+    }
+
+    .planfields label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin: 10px 0 4px
+    }
+
+    .planfields input,
+    .planfields textarea {
+      width: 100%
+    }
+
+    .plancontext {
+      background: #f6fafb;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 14px
+    }
+
+    .plancontext h3 {
+      margin: 0 0 8px;
+      font-size: 15px
+    }
+
+    .plancontext small {
+      display: block;
+      margin-top: 10px
+    }
+
+    .plancontext ul {
+      margin: 4px 0;
+      padding-left: 18px
+    }
+
+    @media(max-width:700px) {
+      .planform {
+        grid-template-columns: 1fr
+      }
+    }
+
     .ownwords.clamp {
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -592,6 +662,63 @@
       .patientLastInitial) + '.' : '');
     // Free text the patient typed under "Something else", shown exactly as written.
     const ownWords = p => (p.barriers || []).includes('other') && String(p.other || '').trim() ? p.other : '';
+    // Packet action plans per barrier (page 5), same as patient.html (keep in sync). Read-only context.
+    const packetIdeas = {
+      forget: ['reminder', 'routine', 'cue', 'trusted'],
+      taste: ['taste_flavoring', 'taste_coating', 'taste_popsicle', 'taste_food'],
+      swallow: ['swallow_candy', 'swallow_head', 'swallow_coating'],
+      embarrass: ['embarrass_discreet', 'embarrass_script']
+    };
+    const msgPrescriber = 'Your doctor, nurse practitioner, or pharmacist will talk with you about this.';
+    const msgSocial = 'A social worker from your team will reach out to help.';
+    const msgReachOut = 'Someone from your care team will reach out to talk with you. You are not in trouble.';
+    const packetMessages = {
+      side: 'Your care team will talk with you about your medicines. Do not change or stop any medicine on your own.',
+      noneed: 'Your transplant coordinator will talk with you about why this medicine matters.',
+      toomany: msgPrescriber,
+      notwork: msgPrescriber,
+      confusing: msgPrescriber,
+      ranout: msgSocial,
+      afford: msgSocial,
+      activities: msgReachOut,
+      refuse: msgReachOut,
+      inconvenient: msgReachOut
+    };
+    const taskStatusNames = {
+      needs_plan: 'Needs a plan',
+      plan_agreed: 'Plan agreed',
+      keep_checking: 'Keep checking'
+    };
+    // Task whose plan form is open (only one at a time).
+    let planFormFor = null;
+    const PLAN_INPUTS = [
+      ['who', 'Who', 'Who will do it, and who helps'],
+      ['what', 'What', 'The one solution to try'],
+      ['how', 'How', 'How it will work'],
+      ['where', 'Where', 'Where it happens'],
+      ['when', 'When', 'When it happens']
+    ];
+    const planInputIds = [...PLAN_INPUTS.map(([k]) => 'plan_' + k), 'plan_patientText'];
+
+    function planSummary(pl) {
+      return `<div class="plansum">${PLAN_INPUTS.map(([k,label])=>`<div><small>${label}</small> ${esc(pl[k])}</div>`).join('')}<div class="patientsees"><small>Patient sees</small><div class="ownwords">${esc(pl.patientText)}</div></div><div class="meta">Agreed ${esc(longDate(pl.createdAt))} · ${esc(pl.createdBy)}</div></div>`
+    }
+
+    function planForm(t) {
+      const ticked = (t.strategies || []).filter(k => (packetIdeas[t.barrier] || []).includes(k));
+      const options = packetIdeas[t.barrier] ? `<ul>${packetIdeas[t.barrier].map(k=>`<li>${esc(strategyNames[k]||k)}</li>`).join('')}</ul>` :
+        packetMessages[t.barrier] ? `<p>Message the patient saw: “${esc(packetMessages[t.barrier])}”</p>` :
+        '<p>The packet has no action plan for this item.</p>';
+      return `<div class="planform" id="planForm" data-task="${t.id}"><div class="planfields"><p class="muted" style="margin-top:0">Make this plan with the patient, not for them.</p>${PLAN_INPUTS.map(([k,label,hint])=>`<label for="plan_${k}">${label}</label><input id="plan_${k}" maxlength="400" placeholder="${esc(hint)}">`).join('')}<label for="plan_patientText">Plan in the patient's own words <span class="meta">(this is what the patient will see)</span></label><textarea id="plan_patientText" maxlength="400" style="min-height:80px"></textarea><div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap"><button class="button" data-save-plan="${t.id}">Save plan</button><button class="button secondary" data-cancel-plan>Cancel</button><span id="planResult" class="muted" role="status"></span></div></div><div class="plancontext"><h3>For reference</h3><small>Ideas the patient ticked</small><p>${ticked.length?ticked.map(k=>esc(strategyNames[k]||k)).join('<br>'):'None ticked for this barrier.'}</p>${t.ownWords&&t.ownWords.trim()?`<small>In the patient's own words</small><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Packet options for this barrier</small>${options}</div></div>`
+    }
+
+    // One barrier task. showPatient: in the worklist, name the patient.
+    function taskCard(t, showPatient) {
+      const who = esc(t.patientName || 'Patient') + (t.patientLastInitial ? ' ' + esc(t.patientLastInitial) + '.' : '');
+      const head = showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`;
+      const action = t.status === 'needs_plan' && planFormFor !== t.id ? `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : '';
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan):''}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}</div>${planFormFor===t.id?planForm(t):''}</div>`
+    }
 
     function stats() {
       const n = k => patients.filter(p => p.status === k).length;
@@ -614,7 +741,7 @@
       const w = p.weekly || [],
         last = w.at(-1),
         daily = p.daily || [];
-      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div><div class="item"><small>Patient-selected plan</small><strong>${esc(p.plan||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
+      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div><div class="item"><small>Patient-selected plan</small><strong>${esc(p.plan||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div><div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
     }
 
     function reports() {
@@ -646,7 +773,7 @@
       const role = worklistRole === 'all' || roles.includes(worklistRole) ? worklistRole : 'all';
       const mine = tasks.filter(x => role === 'all' || x.ownerRole === role);
       const who = x => esc(x.patientName || 'Patient') + (x.patientLastInitial ? ' ' + esc(x.patientLastInitial) + '.' : '');
-      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><span class="muted">${mine.length} open task${mine.length===1?'':'s'}</span></div><div class="list">${mine.length?mine.map(x=>`<div class="item"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong>${who(x)}</strong><small>Came in ${esc(longDate(x.createdAt))}</small></div><div>${esc(names[x.barrier]||x.barrier)}</div>${x.ownWords&&x.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(x.ownWords)}</div>`:''}${role==='all'?`<small>${esc(x.ownerRole)}</small>`:''}<div style="margin-top:6px"><button class="link" data-open="${esc(x.patientId)}">View patient →</button></div></div>`).join(''):'<p class="muted">Nothing on your list right now.</p>'}</div></div>`
+      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><span class="muted">${mine.length} task${mine.length===1?'':'s'}</span></div><div class="list">${mine.length?mine.map(x=>taskCard(x, true)).join(''):'<p class="muted">Nothing on your list right now.</p>'}</div></div>`
     }
 
     function guide() {
@@ -666,6 +793,9 @@
         id: selected,
         value: el('carePlan').value
       } : null;
+      // Keep anything typed into an open plan form across re-renders.
+      const planDraft = planFormFor === null ? null : Object.fromEntries(planInputIds.filter(id => el(id)).map(
+        id => [id, el(id).value]));
       el('heading').textContent = selected ? 'Patient detail' : ({
         overview: 'Patient overview',
         worklist: 'My worklist',
@@ -686,6 +816,9 @@
       shownCarePlan = el('carePlan') ? el('carePlan').value : '';
       // A button-triggered re-render of the same patient keeps the unsaved note.
       if (draft && draft.id === selected && el('carePlan')) el('carePlan').value = draft.value;
+      if (planDraft) Object.entries(planDraft).forEach(([id, v]) => {
+        if (el(id)) el(id).value = v
+      });
     }
     async function refresh() {
       try {
@@ -702,7 +835,9 @@
         } = await rt.json());
         el('connection').className = 'pill green';
         el('connection').textContent = '● Live demo connected';
-        if (!document.activeElement?.matches('input,textarea,select') && !noteHasUnsavedChanges()) render();
+        // Do not re-render under someone typing a note or filling in a plan form.
+        if (!document.activeElement?.matches('input,textarea,select') && !noteHasUnsavedChanges() &&
+          planFormFor === null) render();
       } catch (e) {
         el('connection').className = 'pill red';
         el('connection').textContent = '○ Backend offline';
@@ -715,17 +850,66 @@
         selected = null;
         search = '';
         filter = 'all';
+        planFormFor = null;
         render();
+        return
+      }
+      const makePlan = e.target.closest('[data-make-plan]');
+      if (makePlan) {
+        planFormFor = Number(makePlan.dataset.makePlan);
+        render();
+        el('plan_who')?.focus();
+        return
+      }
+      if (e.target.closest('[data-cancel-plan]')) {
+        planFormFor = null;
+        render();
+        return
+      }
+      const savePlanBtn = e.target.closest('[data-save-plan]');
+      if (savePlanBtn) {
+        const id = Number(savePlanBtn.dataset.savePlan);
+        const body = {
+          by: worklistRole !== 'all' ? worklistRole : undefined
+        };
+        PLAN_INPUTS.forEach(([k]) => body[k] = el('plan_' + k).value);
+        body.patientText = el('plan_patientText').value;
+        const missing = [...PLAN_INPUTS.map(([k, label]) => [k, label]), ['patientText',
+          "Plan in the patient's own words"
+        ]].filter(([k]) => !String(body[k] || '').trim()).map(([, label]) => label);
+        if (missing.length) {
+          el('planResult').textContent = 'Please fill in: ' + missing.join(', ');
+          return
+        }
+        savePlanBtn.disabled = true;
+        try {
+          const r = await fetch('/api/tasks/' + id + '/plan', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
+          planFormFor = null;
+          await refresh();
+          render()
+        } catch (err) {
+          savePlanBtn.disabled = false;
+          if (el('planResult')) el('planResult').textContent = 'Could not save: ' + err.message
+        }
         return
       }
       const open = e.target.closest('[data-open],tr[data-id]');
       if (open) {
         selected = open.dataset.open || open.dataset.id;
+        planFormFor = null;
         render();
         return
       }
       if (e.target.id === 'back') {
         selected = null;
+        planFormFor = null;
         render();
         return
       }

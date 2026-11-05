@@ -57,6 +57,12 @@ BARRIER_OWNERS = {
     "other": "Transplant coordinator",  # to review and re-route
 }
 OWNER_ROLES = list(dict.fromkeys(BARRIER_OWNERS.values()))
+# Task status: needs_plan -> plan_agreed -> keep_checking (MAPS steps 4-5, packet page 4).
+TASK_STATUSES = ("needs_plan", "plan_agreed", "keep_checking")
+# The owner checks back within 2 weeks of agreeing a plan (packet page 4).
+CHECK_BACK_DAYS = 14
+# The five parts of a concrete plan, plus the version the patient sees.
+PLAN_FIELDS = ("who", "what", "how", "where", "when", "patientText")
 NOW = lambda: datetime.now(timezone.utc)
 
 
@@ -107,9 +113,15 @@ def init():
                 "ALTER TABLE patients ADD COLUMN handled_requests INTEGER NOT NULL DEFAULT 0"
             )
         # Clinician-owned follow-up tasks: one per "yes" barrier per assessment.
-        # plan, due_date and outcome are kept for later use.
+        # due_date is the next check-back. The plan text lives in the plans table.
         c.execute(
-            "CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, assessment TEXT NOT NULL, barrier TEXT NOT NULL, owner_role TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL, plan TEXT, due_date TEXT, outcome TEXT, UNIQUE(patient_id, assessment, barrier))"
+            "CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, assessment TEXT NOT NULL, barrier TEXT NOT NULL, owner_role TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'needs_plan', created_at TEXT NOT NULL, plan TEXT, due_date TEXT, outcome TEXT, UNIQUE(patient_id, assessment, barrier))"
+        )
+        c.execute("UPDATE tasks SET status='needs_plan' WHERE status='open'")
+        # Clinician-owned plans, one row per version. The open row (closed_at IS NULL) is
+        # the current plan; closed rows keep the history with their outcome.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, who TEXT NOT NULL, what TEXT NOT NULL, how TEXT NOT NULL, where_text TEXT NOT NULL, when_text TEXT NOT NULL, patient_text TEXT NOT NULL, created_at TEXT NOT NULL, created_by TEXT NOT NULL, closed_at TEXT, outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id))"
         )
         if c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0:
             # Fictional demo patients: (name, BAT "yes" barriers with the biggest first, weekly status)
@@ -201,7 +213,7 @@ def sync_tasks(c, pid, state):
     """Keep one task per "yes" barrier for the patient's current assessment.
 
     Runs only once all 14 BAT items are answered. A barrier changed back to "no"
-    in the same assessment removes its task while it is still open.
+    in the same assessment removes its task only while it has no plan yet.
     """
     answers = state.get("batAnswers") or {}
     if not all(answers.get(k) in ("yes", "no") for k in BAT_KEYS):
@@ -218,14 +230,73 @@ def sync_tasks(c, pid, state):
     for b in yes:
         if b not in existing:
             c.execute(
-                "INSERT INTO tasks(patient_id,assessment,barrier,owner_role,status,created_at) VALUES (?,?,?,?,'open',?)",
+                "INSERT INTO tasks(patient_id,assessment,barrier,owner_role,status,created_at) VALUES (?,?,?,?,'needs_plan',?)",
                 (pid, assessment, b, BARRIER_OWNERS[b], iso()),
             )
             event(c, pid, "task_created", f"Task for {BARRIER_OWNERS[b]}: barrier '{b}'")
     for b, r in existing.items():
-        if b not in yes and r["status"] == "open":
+        if b not in yes and r["status"] == "needs_plan":
             c.execute("DELETE FROM tasks WHERE id=?", (r["id"],))
             event(c, pid, "task_removed", f"Patient changed '{b}' to No; open task removed")
+
+
+def plan_view(p):
+    return {
+        "id": p["id"],
+        "who": p["who"],
+        "what": p["what"],
+        "how": p["how"],
+        "where": p["where_text"],
+        "when": p["when_text"],
+        "patientText": p["patient_text"],
+        "createdAt": p["created_at"],
+        "createdBy": p["created_by"],
+        "closedAt": p["closed_at"],
+        "outcome": p["outcome"],
+    }
+
+
+def task_view(c, t, st):
+    """One task as the clinician sees it: the current plan, plan history and patient context."""
+    plans = c.execute(
+        "SELECT * FROM plans WHERE task_id=? ORDER BY id", (t["id"],)
+    ).fetchall()
+    current = next((p for p in plans if p["closed_at"] is None), None)
+    return {
+        "id": t["id"],
+        "patientId": t["patient_id"],
+        "patientName": st.get("patientName", ""),
+        "patientLastInitial": st.get("patientLastInitial", ""),
+        "barrier": t["barrier"],
+        "ownerRole": t["owner_role"],
+        "status": t["status"],
+        "createdAt": t["created_at"],
+        "dueDate": t["due_date"],
+        "isPrimary": st.get("primary") == t["barrier"],
+        "plan": plan_view(current) if current else None,
+        "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
+        # Patient context shown next to the plan form (read-only).
+        "strategies": st.get("strategies", []),
+        # The patient's own words, exactly as written ("Something else").
+        "ownWords": st.get("other", "") if "other" in st.get("barriers", []) else "",
+    }
+
+
+def clean_plan(data):
+    """Validate the five plan parts and the patient's version. Returns (fields, error)."""
+    fields = {}
+    for k in PLAN_FIELDS:
+        v = data.get(k)
+        if not isinstance(v, str) or not v.strip() or len(v) > 400:
+            return None, f"Please fill in '{k}' (up to 400 characters)"
+        fields[k] = v
+    return fields, None
+
+
+def acting_role(data):
+    """Who is acting, for the audit trail. There is no login in this demo."""
+    by = data.get("by")
+    return (by if by in OWNER_ROLES else "Clinician portal") + " (demo, no login)"
 
 
 def derive(row, c):
@@ -459,25 +530,13 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/tasks":
             with LOCK, db() as c:
                 rows = c.execute(
-                    "SELECT t.*, p.state FROM tasks t JOIN patients p ON p.id = t.patient_id WHERE t.status='open' ORDER BY t.created_at, t.id"
+                    "SELECT t.*, p.state FROM tasks t JOIN patients p ON p.id = t.patient_id ORDER BY t.created_at, t.id"
                 ).fetchall()
-            tasks = []
-            for r in rows:
-                st = json.loads(r["state"])
-                tasks.append(
-                    {
-                        "id": r["id"],
-                        "patientId": r["patient_id"],
-                        "patientName": st.get("patientName", ""),
-                        "patientLastInitial": st.get("patientLastInitial", ""),
-                        "barrier": r["barrier"],
-                        "ownerRole": r["owner_role"],
-                        "status": r["status"],
-                        "createdAt": r["created_at"],
-                        # The patient's own words belong to the "Something else" task.
-                        "ownWords": st.get("other", "") if r["barrier"] == "other" else "",
-                    }
-                )
+                tasks = [
+                    task_view(c, r, json.loads(r["state"]))
+                    for r in rows
+                    if r["status"] in TASK_STATUSES
+                ]
             return self.json({"roles": OWNER_ROLES, "tasks": tasks})
         if path == "/api/patients" or (m and not m.group(2)):
             with LOCK, db() as c:
@@ -571,6 +630,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         path, m = self.route()
         data = self.body()
+        tm = re.fullmatch(r"/api/tasks/(\d+)/(plan)", path)
+        if tm and isinstance(data, dict):
+            with LOCK, db() as c:
+                reply = self.task_action(c, int(tm.group(1)), tm.group(2), data)
+            # Sent only after the block above has committed.
+            return self.json(*reply)
         if not m or not m.group(2) or not isinstance(data, dict):
             return self.json({"error": "Invalid request"}, 400)
         pid, action = m.groups()
@@ -578,6 +643,42 @@ class Handler(SimpleHTTPRequestHandler):
             reply = self.post_action(c, pid, action, data)
         # Sent only after the block above has committed.
         return self.json(*reply)
+
+    def task_action(self, c, task_id, action, data):
+        """Clinician actions on one barrier task; returns (reply, status)."""
+        t = c.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not t or t["status"] not in TASK_STATUSES:
+            return {"error": "Task not found"}, 404
+        pid = t["patient_id"]
+        by = acting_role(data)
+        now = NOW()
+        if action == "plan":
+            # One plan per barrier: a new plan only when the task has none.
+            if t["status"] != "needs_plan":
+                return {"error": "This barrier already has a plan"}, 409
+            fields, error = clean_plan(data)
+            if error:
+                return {"error": error}, 400
+            c.execute(
+                "INSERT INTO plans(task_id,who,what,how,where_text,when_text,patient_text,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                (task_id, fields["who"], fields["what"], fields["how"], fields["where"], fields["when"], fields["patientText"], iso(now), by),
+            )
+            due = now + timedelta(days=CHECK_BACK_DAYS)
+            c.execute(
+                "UPDATE tasks SET status='plan_agreed', due_date=? WHERE id=?",
+                (iso(due), task_id),
+            )
+            event(
+                c,
+                pid,
+                "plan_agreed",
+                f"Plan agreed for '{t['barrier']}' by {by}; check back by {due.date().isoformat()}",
+            )
+        st = json.loads(
+            c.execute("SELECT state FROM patients WHERE id=?", (pid,)).fetchone()["state"]
+        )
+        t = c.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        return {"task": task_view(c, t, st)}, 200
 
     def post_action(self, c, pid, action, data):
         """Clinician actions; returns (reply, status)."""
