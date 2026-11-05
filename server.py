@@ -5,6 +5,7 @@ from urllib.parse import urlparse, unquote
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 import json, sqlite3, threading, re, os, argparse, socket
+from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.environ.get("DEAP_DB", str(ROOT / "deap_demo.sqlite3")))
@@ -69,8 +70,26 @@ def conn():
     return c
 
 
+@contextmanager
+def db():
+    """Open a connection; commit on success, roll back on error, always close.
+
+    Handlers build their reply inside this block and send it after it ends,
+    so every write is committed before the response goes out.
+    """
+    c = conn()
+    try:
+        yield c
+        c.commit()
+    except BaseException:
+        c.rollback()
+        raise
+    finally:
+        c.close()
+
+
 def init():
-    with conn() as c:
+    with db() as c:
         c.execute(
             "CREATE TABLE IF NOT EXISTS patients (id TEXT PRIMARY KEY, state TEXT NOT NULL, care_plan TEXT DEFAULT '', updated_at TEXT NOT NULL, last_engagement TEXT NOT NULL, demo_offset_hours INTEGER DEFAULT 0)"
         )
@@ -390,7 +409,7 @@ def validate_state(state):
 def escalation_worker():
     while True:
         try:
-            with LOCK, conn() as c:
+            with LOCK, db() as c:
                 for row in c.execute("SELECT * FROM patients").fetchall():
                     recalc(c, row)
         except Exception as exc:
@@ -438,7 +457,7 @@ class Handler(SimpleHTTPRequestHandler):
                 {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False}
             )
         if path == "/api/tasks":
-            with LOCK, conn() as c:
+            with LOCK, db() as c:
                 rows = c.execute(
                     "SELECT t.*, p.state FROM tasks t JOIN patients p ON p.id = t.patient_id WHERE t.status='open' ORDER BY t.created_at, t.id"
                 ).fetchall()
@@ -461,31 +480,33 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             return self.json({"roles": OWNER_ROLES, "tasks": tasks})
         if path == "/api/patients" or (m and not m.group(2)):
-            with LOCK, conn() as c:
-                if path == "/api/patients":
-                    rows = c.execute("SELECT * FROM patients").fetchall()
-                    for row in rows:
-                        recalc(c, row)
-                    return self.json({"patients": [derive(row, c) for row in rows]})
-                row = c.execute(
-                    "SELECT * FROM patients WHERE id=?", (m.group(1),)
-                ).fetchone()
-                if not row:
-                    return self.json({"error": "Not found"}, 404)
-                recalc(c, row)
-                return self.json({"patient": derive(row, c)})
+            with LOCK, db() as c:
+                reply = self.read_patients(c, path, m)
+            return self.json(*reply)
         if m and m.group(2) == "escalation":
-            with conn() as c:
+            with db() as c:
                 events = c.execute(
                     "SELECT kind,message,at FROM events WHERE patient_id=? ORDER BY id DESC LIMIT 30",
                     (m.group(1),),
                 ).fetchall()
-                return self.json({"events": [dict(e) for e in events]})
+            return self.json({"events": [dict(e) for e in events]})
         if path not in ("/patient.html", "/clinician.html", "/"):
             return self.json({"error": "Not found"}, 404)
         if path == "/":
             self.path = "/patient.html"
         return super().do_GET()
+
+    def read_patients(self, c, path, m):
+        if path == "/api/patients":
+            rows = c.execute("SELECT * FROM patients").fetchall()
+            for row in rows:
+                recalc(c, row)
+            return {"patients": [derive(row, c) for row in rows]}, 200
+        row = c.execute("SELECT * FROM patients WHERE id=?", (m.group(1),)).fetchone()
+        if not row:
+            return {"error": "Not found"}, 404
+        recalc(c, row)
+        return {"patient": derive(row, c)}, 200
 
     def do_HEAD(self):
         path, _ = self.route()
@@ -512,7 +533,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json({"error": error}, 400)
         if len(json.dumps(state)) > 80000:
             return self.json({"error": "Too large"}, 413)
-        with LOCK, conn() as c:
+        with LOCK, db() as c:
             existing = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
             old = json.loads(existing["state"]) if existing else {}
             activity = not existing or any(
@@ -543,7 +564,9 @@ class Handler(SimpleHTTPRequestHandler):
                 sync_tasks(c, pid, state)
             row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
             recalc(c, row)
-            return self.json({"patient": derive(row, c)})
+            reply = {"patient": derive(row, c)}
+        # Sent only after the block above has committed.
+        return self.json(reply)
 
     def do_POST(self):
         path, m = self.route()
@@ -551,87 +574,93 @@ class Handler(SimpleHTTPRequestHandler):
         if not m or not m.group(2) or not isinstance(data, dict):
             return self.json({"error": "Invalid request"}, 400)
         pid, action = m.groups()
-        with LOCK, conn() as c:
-            row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-            if not row:
-                return self.json({"error": "Not found"}, 404)
-            if action == "care-plan":
-                value = data.get("carePlan", "")
-                if not isinstance(value, str) or len(value) > 1200:
-                    return self.json({"error": "Invalid note"}, 400)
-                c.execute("UPDATE patients SET care_plan=? WHERE id=?", (value, pid))
-                event(c, pid, "care_plan", "Clinician updated follow-up note")
-            elif action == "simulate":
-                hours = data.get("hours")
-                if type(hours) != int or hours not in (0, 25, 49):
-                    return self.json({"error": "Demo hours must be 0, 25, or 49"}, 400)
+        with LOCK, db() as c:
+            reply = self.post_action(c, pid, action, data)
+        # Sent only after the block above has committed.
+        return self.json(*reply)
+
+    def post_action(self, c, pid, action, data):
+        """Clinician actions; returns (reply, status)."""
+        row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+        if not row:
+            return {"error": "Not found"}, 404
+        if action == "care-plan":
+            value = data.get("carePlan", "")
+            if not isinstance(value, str) or len(value) > 1200:
+                return {"error": "Invalid note"}, 400
+            c.execute("UPDATE patients SET care_plan=? WHERE id=?", (value, pid))
+            event(c, pid, "care_plan", "Clinician updated follow-up note")
+        elif action == "simulate":
+            hours = data.get("hours")
+            if type(hours) != int or hours not in (0, 25, 49):
+                return {"error": "Demo hours must be 0, 25, or 49"}, 400
+            c.execute(
+                "UPDATE escalation SET stage='none',acknowledged=0 WHERE patient_id=? AND stage='resolved'",
+                (pid,),
+            )
+            c.execute(
+                "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
+            )
+            event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
+        elif action == "requests":
+            if data.get("action") != "handled":
+                return {"error": "Invalid action"}, 400
+            total = json.loads(row["state"]).get("contactRequests") or 0
+            newly = total - min(row["handled_requests"], total)
+            if newly <= 0:
+                return {"error": "No open support requests"}, 409
+            c.execute(
+                "UPDATE patients SET handled_requests=? WHERE id=?", (total, pid)
+            )
+            event(
+                c,
+                pid,
+                "request_handled",
+                f"Clinician portal (demo, no login) marked {newly} support request(s) handled; {total} received in total",
+            )
+        elif action == "escalation":
+            if data.get("action") not in ("acknowledge", "resolve"):
+                return {"error": "Invalid action"}, 400
+            recalc(c, row)
+            er = c.execute(
+                "SELECT * FROM escalation WHERE patient_id=?", (pid,)
+            ).fetchone()
+            if er and er["stage"] == "resolved" and data["action"] == "resolve":
+                return {"patient": derive(row, c)}, 200
+            if not er or er["stage"] in ("none", "resolved"):
+                return {"error": "No active overdue alert"}, 409
+            if data["action"] == "acknowledge" and er["acknowledged"]:
+                return {"patient": derive(row, c)}, 200
+            if data["action"] == "acknowledge":
                 c.execute(
-                    "UPDATE escalation SET stage='none',acknowledged=0 WHERE patient_id=? AND stage='resolved'",
-                    (pid,),
-                )
-                c.execute(
-                    "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
-                )
-                event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
-            elif action == "requests":
-                if data.get("action") != "handled":
-                    return self.json({"error": "Invalid action"}, 400)
-                total = json.loads(row["state"]).get("contactRequests") or 0
-                newly = total - min(row["handled_requests"], total)
-                if newly <= 0:
-                    return self.json({"error": "No open support requests"}, 409)
-                c.execute(
-                    "UPDATE patients SET handled_requests=? WHERE id=?", (total, pid)
+                    "UPDATE escalation SET acknowledged=1,updated_at=? WHERE patient_id=?",
+                    (iso(), pid),
                 )
                 event(
                     c,
                     pid,
-                    "request_handled",
-                    f"Clinician portal (demo, no login) marked {newly} support request(s) handled; {total} received in total",
+                    "acknowledged",
+                    "Clinician acknowledged non-response alert",
                 )
-            elif action == "escalation":
-                if data.get("action") not in ("acknowledge", "resolve"):
-                    return self.json({"error": "Invalid action"}, 400)
-                recalc(c, row)
-                er = c.execute(
-                    "SELECT * FROM escalation WHERE patient_id=?", (pid,)
-                ).fetchone()
-                if er and er["stage"] == "resolved" and data["action"] == "resolve":
-                    return self.json({"patient": derive(row, c)})
-                if not er or er["stage"] in ("none", "resolved"):
-                    return self.json({"error": "No active overdue alert"}, 409)
-                if data["action"] == "acknowledge" and er["acknowledged"]:
-                    return self.json({"patient": derive(row, c)})
-                if data["action"] == "acknowledge":
-                    c.execute(
-                        "UPDATE escalation SET acknowledged=1,updated_at=? WHERE patient_id=?",
-                        (iso(), pid),
-                    )
-                    event(
-                        c,
-                        pid,
-                        "acknowledged",
-                        "Clinician acknowledged non-response alert",
-                    )
-                else:
-                    c.execute(
-                        "UPDATE escalation SET stage=?,acknowledged=0,note=?,updated_at=? WHERE patient_id=?",
-                        (
-                            "resolved",
-                            "Clinician marked demo follow-up resolved",
-                            iso(),
-                            pid,
-                        ),
-                    )
-                    event(
-                        c,
-                        pid,
+            else:
+                c.execute(
+                    "UPDATE escalation SET stage=?,acknowledged=0,note=?,updated_at=? WHERE patient_id=?",
+                    (
                         "resolved",
-                        "Clinician marked alert resolved (demo only)",
-                    )
-            row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-            recalc(c, row)
-            return self.json({"patient": derive(row, c)})
+                        "Clinician marked demo follow-up resolved",
+                        iso(),
+                        pid,
+                    ),
+                )
+                event(
+                    c,
+                    pid,
+                    "resolved",
+                    "Clinician marked alert resolved (demo only)",
+                )
+        row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+        recalc(c, row)
+        return {"patient": derive(row, c)}, 200
 
 
 def reset_db():
