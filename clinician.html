@@ -343,6 +343,21 @@
       margin-top: 4px
     }
 
+    .taskgroup {
+      margin-top: 18px
+    }
+
+    .taskgroup h3 {
+      font-size: 15px;
+      margin: 0 0 8px
+    }
+
+    .nextaction {
+      font-weight: 750;
+      color: #117e71;
+      margin: 4px 0
+    }
+
     .planhistory {
       margin: 6px 0;
       font-size: 14px
@@ -783,7 +798,7 @@
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
         `<span class="muted">Check-back outcome:</span><button class="button small secondary" data-outcome="working" data-task="${t.id}">Working</button><button class="button small secondary" data-outcome="not_working" data-task="${t.id}">Not working</button><button class="button small secondary" data-adjust="${t.id}">Adjust</button>` :
         '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
     }
 
     function stats() {
@@ -835,11 +850,55 @@
       minute: '2-digit'
     }) : '—';
 
+    // Worklist groups, in the order they are shown. "later" = keep checking, not due yet (Show all only).
+    const GROUPS = [
+      ['overdue', 'Overdue'],
+      ['today', 'Due today'],
+      ['needs', 'Needs a plan'],
+      ['coming', 'Coming up'],
+      ['later', 'Keep checking (not due yet)']
+    ];
+    let showAllTasks = false;
+    const localDay = d => new Date(d).toLocaleDateString('en-CA');
+    // "Today" for this patient's check-backs, including any demo clock offset.
+    const taskToday = t => localDay(Date.now() + (t.clockOffsetDays || 0) * 864e5);
+
+    function taskGroup(t) {
+      if (t.status === 'needs_plan' || !t.dueDate) return 'needs';
+      const due = localDay(t.dueDate),
+        today = taskToday(t);
+      if (due < today) return 'overdue';
+      if (due === today) return 'today';
+      return t.status === 'keep_checking' ? 'later' : 'coming'
+    }
+    const saysNext = {
+      working: "patient says it's working",
+      not_really: 'patient says not really',
+      change: 'patient wants to change it'
+    };
+
+    // The ONE next action for a worklist row.
+    function nextAction(t) {
+      const g = taskGroup(t);
+      if (g === 'needs') return 'Make plan';
+      if (g === 'overdue' || g === 'today') {
+        const a = t.patientAnswer;
+        return 'Check back: ' + (a && a.for === t.dueDate ? saysNext[a.answer] || a.answer : 'no answer from the patient yet')
+      }
+      return (g === 'later' ? 'Keep checking · next check-back ' : 'Check back on ') + shortDate(t.dueDate)
+    }
+
     function worklist() {
       const role = worklistRole === 'all' || roles.includes(worklistRole) ? worklistRole : 'all';
       const mine = tasks.filter(x => role === 'all' || x.ownerRole === role);
-      const who = x => esc(x.patientName || 'Patient') + (x.patientLastInitial ? ' ' + esc(x.patientLastInitial) + '.' : '');
-      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><span class="muted">${mine.length} task${mine.length===1?'':'s'}</span></div><div class="list">${mine.length?mine.map(x=>taskCard(x, true)).join(''):'<p class="muted">Nothing on your list right now.</p>'}</div></div>`
+      const byGroup = Object.fromEntries(GROUPS.map(([g]) => [g, []]));
+      mine.forEach(t => byGroup[taskGroup(t)].push(t));
+      const byDue = (a, b) => String(a.dueDate).localeCompare(String(b.dueDate));
+      ['overdue', 'today', 'coming', 'later'].forEach(g => byGroup[g].sort(byDue));
+      byGroup.needs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const needYou = byGroup.overdue.length + byGroup.today.length + byGroup.needs.length;
+      const shown = GROUPS.filter(([g]) => byGroup[g].length && (g !== 'later' || showAllTasks));
+      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${shown.length?shown.map(([g,label])=>`<div class="taskgroup" data-group="${g}"><h3>${label} <span class="muted">(${byGroup[g].length})</span></h3><div class="list">${byGroup[g].map(x=>taskCard(x, true)).join('')}</div></div>`).join(''):'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
     }
 
     function guide() {
@@ -1072,6 +1131,10 @@
     document.addEventListener('change', e => {
       if (e.target.id === 'filter') {
         filter = e.target.value;
+        render()
+      }
+      if (e.target.id === 'showAllTasks') {
+        showAllTasks = e.target.checked;
         render()
       }
       if (e.target.id === 'worklistRole') {
