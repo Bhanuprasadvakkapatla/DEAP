@@ -363,10 +363,34 @@ def invite_view(c, inv):
         "lang": inv["lang"],
         "leads": inv["leads"],
     }
+    sharing = family_sharing(main, inv["leads"])
+    who["sharing"] = sharing
     if owns_record(inv):
         return {"invite": who, "patient": derive(prow, c)}
-    # Caregiver of a patient aged 10+: nothing from the patient's record yet.
-    return {"invite": who, "patient": {"plans": [], "carePlan": "", "clockOffsetDays": 0}}
+    # Caregiver of a patient aged 10+ (proposed demo rules): never the patient's checklist
+    # answers, own words, weekly ratings or check-back notes. Plans and the weekly colour only
+    # when the patient shares them; check-back dates always.
+    plans = patient_plans(c, inv["family_id"], main)
+    weekly = (main.get("weekly") or [None])[-1]
+    return {
+        "invite": who,
+        "patient": {
+            "plans": plans if sharing["plans"] else [],
+            "checkbackDates": sorted(p["dueDate"] for p in plans if p["dueDate"]),
+            "sharedWeekly": {"status": weekly["status"], "date": weekly["date"]} if sharing["weekly"] and weekly else None,
+            "carePlan": "",
+            "clockOffsetDays": prow["plan_clock_days"],
+        },
+    }
+
+
+def family_sharing(main, leads):
+    """What the patient (10+) shares with the caregiver. Patient's own setting, or the default."""
+    sp, sw = main.get("sharePlans"), main.get("shareWeekly")
+    return {
+        "plans": sp if isinstance(sp, bool) else leads != "patient",
+        "weekly": sw if isinstance(sw, bool) else False,
+    }
 
 
 def family_info(c, pid):
@@ -776,6 +800,7 @@ def derive(row, c, chart=False):
         extra = {
             "family": family_info(c, pid),
             "answers": answer_compare(c, pid, state),
+            "sharing": family_sharing(state, (family_info(c, pid) or {}).get("leads", "")),
             "chart": signals,
             # Latest weekly answer is Green but the chart has a flag.
             "chartMismatch": bool(signals["flags"]) and latest == "green",
@@ -920,7 +945,7 @@ def validate_state(state):
         or not 0 <= state.get("contactRequests", 0) <= 100000
     ):
         return "Invalid support request count"
-    for key in ("silence", "shift"):
+    for key in ("silence", "shift", "sharePlans", "shareWeekly"):
         if key in state and type(state[key]) != bool:
             return "Invalid " + key
     checks = state.get("checkbacks", {})

@@ -301,6 +301,14 @@
       color: #128367
     }
 
+    .whosees {
+      margin: 6px 0 10px;
+      padding-left: 18px;
+      line-height: 1.5;
+      font-size: 14px;
+      color: #30566b
+    }
+
     .planitem+.planitem {
       border-top: 1px solid #d5eae0;
       margin-top: 12px;
@@ -738,7 +746,9 @@
       null;
     const KEY = 'deap_patient_caregiver_v5' + (INVITE ? ':' + INVITE : '');
     // Who this link belongs to (from the server): person, names, age, language, who leads.
-    let deapInvite = null;
+    let deapInvite = null,
+      // The patient-record part of what the server sent for this link (already filtered).
+      deapView = null;
     // Barriers Assessment Tool (BAT), 14 items in packet order, then "Something else".
     const batKeys = ['forget', 'taste', 'swallow', 'side', 'embarrass', 'noneed', 'toomany', 'notwork',
       'confusing', 'ranout', 'afford', 'activities', 'refuse', 'inconvenient'
@@ -913,6 +923,25 @@
         openWeekly: 'Do weekly check-in',
         edit: 'Edit preferences',
         youAre: 'You are',
+        ws_title: 'Who sees what',
+        ws_team: 'Your care team sees everything you share here.',
+        ws_ptCgNot: '{cg} does not see your checklist answers, your own words, or your check-back notes.',
+        ws_ptNever: "You never see {cg}'s checklist answers.",
+        ws_sharePlans: 'Share my plans with {cg}',
+        ws_shareWeekly: 'Share my weekly check-in with {cg}',
+        ws_cgSees: 'You see:',
+        ws_cgDates: 'upcoming check-back dates',
+        ws_cgPlans: "{pt}'s plans (shared by {pt})",
+        ws_cgWeekly: "{pt}'s weekly check-in (shared by {pt})",
+        ws_cgNot: "You do not see {pt}'s checklist answers, own words, or check-back notes.",
+        ws_cgPtNot: '{pt} does not see your checklist answers.',
+        ws_under10: 'You are the main user for {pt}. You see everything about {pt} here.',
+        ws_proposed: 'Proposed rules for this demo. Your care team decides the real rules.',
+        theirPlans: "{pt}'s plans",
+        plansPrivate: "{pt}'s plans are private.",
+        noPlanYet: 'The care team will make a plan with {pt}.',
+        upcomingChecks: 'Upcoming check-backs',
+        theirWeekly: "{pt}'s latest weekly check-in",
         badLink: 'This link is not valid. Please ask your care team for a new one.',
         emergency: 'If someone is unconscious or unresponsive, call 911.'
       },
@@ -1060,6 +1089,25 @@
         openWeekly: 'Responder por la semana',
         edit: 'Cambiar preferencias',
         youAre: 'Eres',
+        ws_title: 'Quién ve qué',
+        ws_team: 'Tu equipo de cuidado ve todo lo que compartes aquí.',
+        ws_ptCgNot: '{cg} no ve tus respuestas de la lista, tus propias palabras ni tus notas de seguimiento.',
+        ws_ptNever: 'Tú nunca ves las respuestas de la lista de {cg}.',
+        ws_sharePlans: 'Compartir mis planes con {cg}',
+        ws_shareWeekly: 'Compartir mi respuesta semanal con {cg}',
+        ws_cgSees: 'Tú ves:',
+        ws_cgDates: 'las próximas fechas de seguimiento',
+        ws_cgPlans: 'los planes de {pt} (si {pt} los comparte)',
+        ws_cgWeekly: 'la respuesta semanal de {pt} (si {pt} la comparte)',
+        ws_cgNot: 'No ves las respuestas de la lista de {pt}, sus propias palabras ni sus notas de seguimiento.',
+        ws_cgPtNot: '{pt} no ve tus respuestas de la lista.',
+        ws_under10: 'Eres quien usa la app por {pt}. Aquí ves todo sobre {pt}.',
+        ws_proposed: 'Reglas propuestas para esta demostración. Tu equipo de cuidado decide las reglas reales.',
+        theirPlans: 'Planes de {pt}',
+        plansPrivate: 'Los planes de {pt} son privados.',
+        noPlanYet: 'El equipo de cuidado hará un plan con {pt}.',
+        upcomingChecks: 'Próximos seguimientos',
+        theirWeekly: 'Última respuesta semanal de {pt}',
         badLink: 'Este enlace no es válido. Pide uno nuevo a tu equipo de cuidado.',
         emergency: 'Si alguien está inconsciente o no responde, llama al 911.'
       }
@@ -1224,6 +1272,8 @@
     const dueCheck = () => deapPlans.find(p => isDue(p) && (s.checkbacks || {})[p.taskId]?.for !== p.dueDate);
 
     function checkBackCard() {
+      // A caregiver of a patient 10+ is only asked when "Who leads" includes them (set by the server).
+      if (isCg10() && !deapInvite.getsCheckbacks) return '';
       const p = dueCheck();
       if (!p) return '';
       if (checkDraft.taskId !== p.taskId) checkDraft = {
@@ -1236,7 +1286,61 @@
 
     // Plans the care team agreed with the patient (from the server), in the patient's own words.
     function myPlans() {
+      if (isCg10()) return theirPlans();
       return `<div class="card soft" id="myPlan"><div class="small">${t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
+    }
+
+    // ---- Personal links: who this person is, and what they may see (the server enforces it) ----
+    const tf = (k, v = {}) => t(k).replace(/\{(\w+)\}/g, (_, n) => v[n] ?? '');
+    // Caregiver of a patient aged 10+: a separate person with their own answers.
+    const isCg10 = () => !!(INVITE && deapInvite && deapInvite.person === 'caregiver' && deapInvite.age >= 10);
+    const isPt10 = () => !!(INVITE && deapInvite && deapInvite.person === 'patient');
+
+    // What a caregiver (10+) sees of the patient: only what the server sent for this link.
+    function theirPlans() {
+      const pt = esc(deapInvite.patientName),
+        v = deapView || {};
+      const shared = deapInvite.sharing?.plans;
+      const plans = shared ? (deapPlans.length ? deapPlans.map(p => `<div class="planitem"><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join('') : `<h3 style="margin-top:8px">${tf('noPlanYet',{pt})}</h3>`) : `<p>${tf('plansPrivate',{pt})}</p>`;
+      const dates = (v.checkbackDates || []).map(d => new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
+        month: 'short',
+        day: 'numeric'
+      }));
+      const wk = v.sharedWeekly ? `<div class="small" style="margin-top:10px">${tf('theirWeekly',{pt})}</div><p><span class="pill ${v.sharedWeekly.status==='yellow'?'yellow':v.sharedWeekly.status==='red'?'red':''}">${esc(t(v.sharedWeekly.status).split(' — ')[0])}</span></p>` : '';
+      return `<div class="card soft" id="myPlan"><div class="small">${tf('theirPlans',{pt})}</div>${plans}${dates.length?`<div class="small" style="margin-top:10px">${t('upcomingChecks')}</div><p id="checkDates">${esc(dates.join(' · '))}</p>`:''}${wk}</div>`
+    }
+
+    // "Who sees what", in plain words, for this person.
+    function whoSeesCard() {
+      if (!INVITE || !deapInvite) return '';
+      const i = deapInvite,
+        cg = esc(i.caregiverName),
+        pt = esc(i.patientName),
+        sh = i.sharing || {};
+      let lines, toggles = '';
+      if (i.person === 'caregiver' && i.age < 10) lines = [tf('ws_under10', {
+        pt
+      }), t('ws_team')];
+      else if (i.person === 'caregiver') lines = [t('ws_team'), tf('ws_cgPtNot', {
+        pt
+      }), t('ws_cgSees') + ' ' + [t('ws_cgDates'), sh.plans ? tf('ws_cgPlans', {
+        pt
+      }) : '', sh.weekly ? tf('ws_cgWeekly', {
+        pt
+      }) : ''].filter(Boolean).join('; ') + '.', tf('ws_cgNot', {
+        pt
+      })];
+      else {
+        lines = [t('ws_team'), tf('ws_ptCgNot', {
+          cg
+        }), tf('ws_ptNever', {
+          cg
+        })];
+        // The patient (10+) decides what the caregiver may see.
+        toggles =
+          `<label class="choice" style="font-size:13px"><span>${tf('ws_sharePlans',{cg})}</span><input id="sharePlans" type="checkbox" ${sh.plans?'checked':''}></label><label class="choice" style="font-size:13px"><span>${tf('ws_shareWeekly',{cg})}</span><input id="shareWeekly" type="checkbox" ${sh.weekly?'checked':''}></label>`
+      }
+      return `<div class="card" id="whoSees"><h3>${t('ws_title')}</h3><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul>${toggles}<p class="small">${t('ws_proposed')}</p></div>`
     }
 
     function today() {
@@ -1280,7 +1384,7 @@
     function settings() {
       return header('YOUR SPACE', t('settingsTitle'), t('personalizeDesc')) +
         // With a personal link, who is answering comes from the link: no name fields, no role switch.
-        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?'':`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
+        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
     }
 
@@ -1507,6 +1611,14 @@
     });
     document.addEventListener('change', e => {
       const id = e.target.id;
+      // Patient (10+) chooses what the caregiver may see; saved in the patient's own state.
+      if (id === 'sharePlans' || id === 'shareWeekly') {
+        s[id] = e.target.checked;
+        if (deapInvite?.sharing) deapInvite.sharing[id === 'sharePlans' ? 'plans' : 'weekly'] = e.target.checked;
+        save();
+        render();
+        return
+      }
       if (id === 'shift') s.shift = e.target.checked;
       if (id === 'channel') s.channel = e.target.value;
       if (id === 'tone') s.tone = e.target.value;
@@ -1627,6 +1739,7 @@
         deapStatus(true);
         if (INVITE) {
           deapInvite = data.invite;
+          deapView = data.patient;
           deapApplyInvite(false)
         }
         const cp = data.patient?.carePlan || '';
@@ -1643,7 +1756,8 @@
 
     // Show new or changed plans; wait while the patient is typing so nothing they type is lost.
     function deapUpdatePlans(plans, clockDays) {
-      const key = JSON.stringify([plans, clockDays]);
+      // Also re-render when what this link may see changes (sharing, who leads, check-back dates).
+      const key = JSON.stringify([plans, clockDays, deapInvite, deapView?.checkbackDates, deapView?.sharedWeekly]);
       if (key !== deapPlansKey) {
         deapPlans = plans;
         deapClockDays = clockDays;

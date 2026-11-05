@@ -364,6 +364,12 @@
       overflow-wrap: anywhere
     }
 
+    .whosees {
+      margin: 6px 0;
+      padding-left: 18px;
+      line-height: 1.5
+    }
+
     table.answers {
       min-width: 0;
       margin: 8px 0
@@ -1029,10 +1035,25 @@
       return `<div class="item"><small>Barrier answers, side by side</small>${a.differ.length?`<p class="mismatch" id="differNote">${differText(a.differ.length)}</p>`:''}${waiting}<table class="answers" id="answersTable"><thead><tr><th>Item</th><th>Patient</th><th>Caregiver (${cg})</th></tr></thead><tbody>${Object.keys(a.patient).map(k=>`<tr class="${a.differ.includes(k)?'differ':''}" data-item="${k}"><td>${esc(names[k]||k)}${a.differ.includes(k)?' <span class="pill">Differs</span>':''}</td><td>${yn(a.patient[k])}</td><td>${yn(a.caregiver[k])}</td></tr>`).join('')}</tbody></table>${a.caregiverWords&&a.caregiverWords.trim()?`<small>In the caregiver's own words</small><div class="ownwords">${esc(a.caregiverWords)}</div>`:''}</div>`
     }
 
+    // Same "Who sees what" rules the family sees in Settings (proposed demo rules).
+    function whoSeesSummary(p) {
+      const f = p.family,
+        pt = esc(p.patientName),
+        cg = esc(f.caregiverName),
+        sh = p.sharing || {};
+      const lines = f.age < 10 ? [`${cg} is the main user for ${pt} and sees everything about ${pt}.`, 'Care team: sees everything.'] : [
+        'Care team: sees everything.',
+        `${pt}: sees their own answers, own words, plans and check-backs; never ${cg}'s checklist answers.`,
+        `${cg}: sees their own answers and upcoming check-back dates; not ${pt}'s checklist answers, own words, weekly ratings or check-back notes.`,
+        `${pt}'s plans shared with ${cg}: <b id="sharePlansNow">${sh.plans?'On':'Off'}</b> · weekly check-in shared: <b id="shareWeeklyNow">${sh.weekly?'On':'Off'}</b> (${pt}'s choice)`
+      ];
+      return `<div class="item" id="whoSeesSummary"><small>Who sees what</small><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul><div class="meta">Proposed privacy rules for the demo; the clinical team decides the real rules.</div></div>`
+    }
+
     function familyPanel(p) {
       const f = p.family;
       if (!f) return '';
-      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong></div>${answersTable(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
+      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong></div>${whoSeesSummary(p)}${answersTable(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
     }
 
     function enroll() {

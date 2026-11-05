@@ -67,6 +67,18 @@ For each barrier task the owner agrees **one concrete plan** with the patient (w
 - **Demo: jump forward 14 days** (clinician patient detail, demo only) moves that patient's check-back clock forward so check-backs come due. Real time is not changed; audit times stay real.
 - `DEAP_DURABILITY_DAYS` (default `30`): days until the next check-back after a plan is marked Working. Durability interval is a demo setting; the clinical team sets the real schedule.
 
+### Families: patient and caregiver separately (must-keep #2)
+
+The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link only (the caregiver is the user). 10 and older: a patient link and a caregiver link. Each link (`patient.html?invite=TOKEN`) is one person with their own answers; two links in the same browser are two people. Each person answers the 14-item BAT on their own; tasks show "Reported by: Patient / Caregiver / Both", and the care team sees where the answers differ.
+
+**Who sees what.** Proposed privacy rules for the demo; the clinical team decides the real rules.
+
+- Care team: sees everything.
+- Patient (10+): sees their own answers, own words, plans and check-backs. Never sees the caregiver's checklist answers.
+- Caregiver of a patient 10+: sees their own answers and upcoming check-back dates. Does not see the patient's checklist answers, own words, weekly ratings or check-back notes. Sees the patient's plans only if the patient's setting "Share my plans with [caregiver]" is on (default on for Parent leads and Shared, off for Patient leads). The patient can also turn on "Share my weekly check-in with [caregiver]" (default off; shares the Green/Yellow/Red answer and date, not the note).
+- Caregiver of a patient under 10: sees everything about the child.
+- The server enforces these rules: each link's page only receives what that person may see, and family records cannot be read through the open patient endpoint.
+
 ### Chart risk signals (demo — no real EHR)
 
 Packet must-keep #6: use risk signals already in the chart. All chart data here is fictional and stored in server tables (`chart_visits`, `labs`), never in the patient's state. Three flags, computed on the server:
