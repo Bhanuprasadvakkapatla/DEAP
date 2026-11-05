@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DEAP Connect local-only synthetic demo. NOT clinical monitoring."""
+"""KTx-CONNECT local-only synthetic demo. NOT clinical monitoring."""
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
@@ -523,7 +523,7 @@ def lan_address():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DEAP Connect synthetic local demo server")
+    parser = argparse.ArgumentParser(description="KTx-CONNECT synthetic local demo server")
     parser.add_argument(
         "--reset",
         action="store_true",
@@ -536,7 +536,7 @@ if __name__ == "__main__":
         init()
     threading.Thread(target=escalation_worker, daemon=True).start()
     print(
-        f"DEAP Connect synthetic demo: http://localhost:{PORT}/clinician.html",
+        f"KTx-CONNECT synthetic demo: http://localhost:{PORT}/clinician.html",
         flush=True,
     )
     if HOST == "0.0.0.0":

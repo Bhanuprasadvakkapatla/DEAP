@@ -5,7 +5,7 @@
   <meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
   <meta content="#0b2037" name="theme-color"/>
   <title>
-   DEAP Connect | Patient &amp; Family
+   KTx-CONNECT | Patient &amp; Family
   </title>
   <style>
     :root {
@@ -618,7 +618,7 @@
      </span>
     </h1>
     <p>
-     DEAP Connect is a mobile-first patient and caregiver experience built around the existing KTx-CONNECT care journey. Explore a real, interactive prototype with supportive check-ins, personalized message previews, and progress you can see.
+     KTx-CONNECT is a mobile-first patient and caregiver experience for the transplant care journey. Explore a real, interactive prototype with supportive check-ins, personalized message previews, and progress you can see.
     </p>
     <div class="features">
      <div class="feature">
@@ -650,18 +650,11 @@
      All information is fictional. No real messages are sent. Clinical content is a placeholder pending team review.
     </p>
    </section>
-   <section aria-label="DEAP mobile application" class="phone">
+   <section aria-label="KTx-CONNECT mobile application" class="phone">
     <header class="top">
      <div class="topline">
       <div class="logo">
-       KTx
-       <span>
-        •
-       </span>
-       CONNECT
-       <span style="font-size:11px;letter-spacing:1px">
-        / DEAP
-       </span>
+       KTx<span>-</span>CONNECT
       </div>
       <button aria-label="Change language" class="lang" id="lang">
        ESPAÑOL
@@ -1020,7 +1013,7 @@
     function today() {
       const logged = s.daily.some(x => x.date === todayKey());
       const takenToday = s.daily.some(x => x.date === todayKey() && x.status === 'reported_taken');
-      return header('DEAP CONNECT', s.role === 'caregiver' ?
+      return header('KTx-CONNECT', s.role === 'caregiver' ?
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +

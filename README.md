@@ -1,4 +1,4 @@
-# DEAP Connect — Patient/Caregiver + Clinician Full-Stack Demo
+# KTx-CONNECT — Patient/Caregiver + Clinician Full-Stack Demo
 
 **Synthetic hackathon prototype only. Not for clinical use.**
 
