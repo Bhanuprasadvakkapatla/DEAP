@@ -1025,11 +1025,12 @@
 
     function today() {
       const logged = s.daily.some(x => x.date === todayKey());
+      const takenToday = s.daily.some(x => x.date === todayKey() && x.status === 'reported_taken');
       return header('DEAP CONNECT', s.role === 'caregiver' ?
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        `<div class="card soft"><div class="small">${t('plan')}</div><h3 style="margin-top:8px">${esc(s.plan||t('planDefault'))}</h3><span class="pill">${esc(s.primary?t(s.primary):t('noData'))}</span></div><div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(logged?'✓ '+t('todayLogged'):t('took'),'took',logged?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        `<div class="card soft"><div class="small">${t('plan')}</div><h3 style="margin-top:8px">${esc(s.plan||t('planDefault'))}</h3><span class="pill">${esc(s.primary?t(s.primary):t('noData'))}</span></div><div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
@@ -1141,7 +1142,10 @@
         return go('onboard')
       }
       if (a === 'took') {
-        if (!s.daily.some(x => x.date === todayKey())) s.daily.push({
+        // Latest tap of the day wins.
+        const record = s.daily.find(x => x.date === todayKey());
+        if (record) record.status = 'reported_taken';
+        else s.daily.push({
           date: todayKey(),
           status: 'reported_taken'
         });
