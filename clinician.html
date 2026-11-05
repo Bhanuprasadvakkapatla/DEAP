@@ -603,7 +603,19 @@
       return `<div class="panel"><h2>Live two-view demonstration</h2><ol style="line-height:2"><li>Open <a href="/patient.html" target="_blank" rel="noopener">Patient & caregiver app</a> in a separate browser tab.</li><li>Complete onboarding using a fictional name and select one or more barriers.</li><li>Return to this clinician portal. The new patient appears in the roster after synchronization.</li><li>Submit a Yellow or Red weekly check-in in the patient tab.</li><li>Open Attention queue here to see the changed status.</li><li>Open the patient record, write a fictional follow-up note, and click Save.</li><li>Return to the patient Today screen; the note appears after the next refresh/poll.</li></ol><div class="alert"><strong>Important:</strong> This is a local hackathon demo, not a secure clinical product. There is no authentication, access control, encryption at rest, EHR connection, or real SMS delivery. Never enter real patient data.</div></div>`
     }
 
+    // Saved carePlan that was last put into the note box.
+    let shownCarePlan = '';
+    // True when the follow-up note box holds text that differs from the saved carePlan.
+    function noteHasUnsavedChanges() {
+      const box = el('carePlan');
+      return !!(box && selected && box.value !== shownCarePlan);
+    }
+
     function render() {
+      const draft = noteHasUnsavedChanges() ? {
+        id: selected,
+        value: el('carePlan').value
+      } : null;
       el('heading').textContent = selected ? 'Patient detail' : ({
         overview: 'Patient overview',
         attention: 'Attention queue',
@@ -618,6 +630,9 @@
       el('content').innerHTML = selected ? detail(patients.find(p => p.id === selected) || {
         id: selected
       }) : view === 'reports' ? reports() : view === 'guide' ? guide() : overview();
+      shownCarePlan = el('carePlan') ? el('carePlan').value : '';
+      // A button-triggered re-render of the same patient keeps the unsaved note.
+      if (draft && draft.id === selected && el('carePlan')) el('carePlan').value = draft.value;
     }
     async function refresh() {
       try {
@@ -628,7 +643,7 @@
         patients = (await r.json()).patients;
         el('connection').className = 'pill green';
         el('connection').textContent = '● Live demo connected';
-        if (!document.activeElement?.matches('input,textarea,select')) render();
+        if (!document.activeElement?.matches('input,textarea,select') && !noteHasUnsavedChanges()) render();
       } catch (e) {
         el('connection').className = 'pill red';
         el('connection').textContent = '○ Backend offline';
@@ -687,16 +702,18 @@
         const button = e.target;
         button.disabled = true;
         try {
+          const value = el('carePlan').value;
           const r = await fetch('/api/patients/' + encodeURIComponent(selected) + '/care-plan', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              carePlan: el('carePlan').value
+              carePlan: value
             })
           });
           if (!r.ok) throw Error('Unable to save');
+          shownCarePlan = value;
           el('saveResult').textContent = 'Saved and shared. Patient app updates automatically.';
           await refresh()
         } catch (err) {
