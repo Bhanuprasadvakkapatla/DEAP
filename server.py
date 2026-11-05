@@ -3,8 +3,8 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
-import json, sqlite3, threading, re, os, argparse, socket
+from datetime import datetime, timezone, timedelta, date
+import json, sqlite3, threading, re, os, argparse, socket, statistics, calendar
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent
@@ -67,6 +67,16 @@ DURABILITY_DAYS = int(os.environ.get("DEAP_DURABILITY_DAYS", "30"))
 if DURABILITY_DAYS < 1:
     raise ValueError("DEAP_DURABILITY_DAYS must be at least 1")
 OUTCOME_NAMES = {"working": "Working", "not_working": "Not working", "adjust": "Adjust"}
+
+# Chart risk signals (packet page 4, must-keep #6). Demo settings; the clinical team sets real ones.
+# The packet says "swing more than 2 SD across 4 draws". We read this as the standard deviation
+# of the last 4 tacrolimus levels being above 2. Confirm with the clinical team.
+TAC_SD = float(os.environ.get("DEAP_TAC_SD", "2.0"))
+TAC_DRAWS = 4
+VISIT_MONTHS = int(os.environ.get("DEAP_VISIT_MONTHS", "4"))  # calendar months
+LAB_DAYS = int(os.environ.get("DEAP_LAB_DAYS", "42"))  # 6 weeks
+if TAC_SD <= 0 or VISIT_MONTHS < 1 or LAB_DAYS < 1:
+    raise ValueError("Chart flag settings must be positive")
 # The five parts of a concrete plan, plus the version the patient sees.
 PLAN_FIELDS = ("who", "what", "how", "where", "when", "patientText")
 # Patient check-back answers ("Is your plan working?"), stored in the patient's own state.
@@ -239,6 +249,48 @@ SEED_CHART = {
     "demo-11": (30, [(7, 9.9), (21, 5.8), (35, 10.2), (49, 5.4)]),  # Drew: weekly Green, levels unsteady
     "demo-12": (152, [(11, 7.5), (25, 7.2), (39, 7.6), (53, 7.3)]),  # Parker: no clinic visit in over 4 months
 }
+
+
+def add_months(d, n):
+    """Same day n calendar months later (clamped to the month's last day)."""
+    m = d.month - 1 + n
+    y, m = d.year + m // 12, m % 12 + 1
+    return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
+
+
+def chart_signals(c, pid):
+    """Chart risk signals for one patient (clinician-only). No target range; never high/low."""
+    today = NOW().date()
+    v = c.execute("SELECT last_visit FROM chart_visits WHERE patient_id=?", (pid,)).fetchone()
+    draws = c.execute(
+        "SELECT drawn_on, tacrolimus FROM labs WHERE patient_id=? ORDER BY drawn_on DESC, id DESC",
+        (pid,),
+    ).fetchall()
+    recent = [{"date": d["drawn_on"], "level": d["tacrolimus"]} for d in draws[:TAC_DRAWS]]
+    # Sample standard deviation of the last 4 levels; needs at least 4 draws.
+    spread = (
+        round(statistics.stdev(x["level"] for x in recent), 2)
+        if len(recent) == TAC_DRAWS
+        else None
+    )
+    last_visit = v["last_visit"] if v else None
+    last_lab = draws[0]["drawn_on"] if draws else None
+    flags = []
+    if spread is not None and spread > TAC_SD:
+        flags.append({"kind": "unsteady", "text": f"Levels unsteady: spread {spread:.1f} across last {TAC_DRAWS} draws"})
+    if last_visit and today > add_months(date.fromisoformat(last_visit), VISIT_MONTHS):
+        flags.append({"kind": "no_visit", "text": f"No clinic visit in over {VISIT_MONTHS} months"})
+    if last_lab and (today - date.fromisoformat(last_lab)).days > LAB_DAYS:
+        span = f"{LAB_DAYS // 7} weeks" if LAB_DAYS % 7 == 0 else f"{LAB_DAYS} days"
+        flags.append({"kind": "no_labs", "text": f"No labs in over {span}"})
+    return {
+        "hasData": bool(v or draws),
+        "lastVisit": last_visit,
+        "lastLab": last_lab,
+        "recentLevels": recent,
+        "spread": spread,
+        "flags": flags,
+    }
 
 
 def seed_chart(c):

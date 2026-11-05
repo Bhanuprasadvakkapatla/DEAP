@@ -67,6 +67,16 @@ For each barrier task the owner agrees **one concrete plan** with the patient (w
 - **Demo: jump forward 14 days** (clinician patient detail, demo only) moves that patient's check-back clock forward so check-backs come due. Real time is not changed; audit times stay real.
 - `DEAP_DURABILITY_DAYS` (default `30`): days until the next check-back after a plan is marked Working. Durability interval is a demo setting; the clinical team sets the real schedule.
 
+### Chart risk signals (demo — no real EHR)
+
+Packet must-keep #6: use risk signals already in the chart. All chart data here is fictional and stored in server tables (`chart_visits`, `labs`), never in the patient's state. Three flags, computed on the server:
+
+- **Levels unsteady**: standard deviation of the last 4 tacrolimus levels above `DEAP_TAC_SD` (default `2.0`). Needs at least 4 draws. The packet says "swing more than 2 SD across 4 draws". We read this as the standard deviation of the last 4 tacrolimus levels being above 2. Confirm with the clinical team. (We use the sample standard deviation.)
+- **No clinic visit in over 4 months** (calendar months; `DEAP_VISIT_MONTHS`, default `4`).
+- **No labs in over 6 weeks** (`DEAP_LAB_DAYS`, default `42`).
+
+No target range is shown and levels are never called high or low; we were not given those.
+
 ### API
 
 - `GET /api/health`
