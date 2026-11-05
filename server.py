@@ -159,6 +159,19 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, who TEXT NOT NULL, what TEXT NOT NULL, how TEXT NOT NULL, where_text TEXT NOT NULL, when_text TEXT NOT NULL, patient_text TEXT NOT NULL, created_at TEXT NOT NULL, created_by TEXT NOT NULL, closed_at TEXT, outcome TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id))"
         )
+        # Families and personal links. Clinician-owned; separate from every person's state.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS families (id TEXT PRIMARY KEY, age INTEGER NOT NULL, leads TEXT NOT NULL, caregiver_name TEXT NOT NULL, created_at TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'en', FOREIGN KEY(id) REFERENCES patients(id))"
+        )
+        if "lang" not in [r["name"] for r in c.execute("PRAGMA table_info(families)")]:
+            c.execute("ALTER TABLE families ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'")
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, family_id TEXT NOT NULL, person TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
+        )
+        # The caregiver's own answers for a patient aged 10+ (the patient's live in patients.state).
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS caregiver_states (family_id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
+        )
         fresh_seed = c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0
         if fresh_seed:
             # Fictional demo patients: (name, BAT "yes" barriers with the biggest first, weekly status)
@@ -240,19 +253,6 @@ def init():
         )
         if c.execute("SELECT COUNT(*) FROM labs").fetchone()[0] == 0:
             seed_chart(c)
-        # Families and personal links. Clinician-owned; separate from every person's state.
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS families (id TEXT PRIMARY KEY, age INTEGER NOT NULL, leads TEXT NOT NULL, caregiver_name TEXT NOT NULL, created_at TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'en', FOREIGN KEY(id) REFERENCES patients(id))"
-        )
-        if "lang" not in [r["name"] for r in c.execute("PRAGMA table_info(families)")]:
-            c.execute("ALTER TABLE families ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'")
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, family_id TEXT NOT NULL, person TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
-        )
-        # The caregiver's own answers for a patient aged 10+ (the patient's live in patients.state).
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS caregiver_states (family_id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
-        )
 
 
 def create_family(c, first, initial, age, lang, caregiver, leads=None):
@@ -328,10 +328,14 @@ def save_main_state(c, pid, state):
 
 def save_caregiver_state(c, fid, state):
     """Save the caregiver's own state (patient aged 10+). Never touches the patient's state."""
+    old = caregiver_state(c, fid) or {}
     c.execute(
         "INSERT INTO caregiver_states(family_id,state,updated_at) VALUES (?,?,?) ON CONFLICT(family_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at",
         (fid, json.dumps(state), iso()),
     )
+    if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers")):
+        main = json.loads(c.execute("SELECT state FROM patients WHERE id=?", (fid,)).fetchone()["state"])
+        sync_tasks(c, fid, main)
 
 
 def invite_row(c, token):
@@ -535,17 +539,61 @@ def event(c, pid, kind, message):
     )
 
 
+def bat_complete(st):
+    return all((st.get("batAnswers") or {}).get(k) in ("yes", "no") for k in BAT_KEYS)
+
+
+def caregiver_state(c, fid):
+    r = c.execute("SELECT state FROM caregiver_states WHERE family_id=?", (fid,)).fetchone()
+    return json.loads(r["state"]) if r else None
+
+
+def reported_by(c, pid, st, barrier):
+    """Who said "yes" to this barrier: Patient, Caregiver or Both."""
+    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    if not fam:
+        return "Caregiver" if st.get("role") == "caregiver" else "Patient"
+    if fam["age"] < 10:
+        return "Caregiver"  # under 10 the caregiver answers for the child
+    cs = caregiver_state(c, pid) or {}
+    p = bat_complete(st) and barrier in st.get("barriers", [])
+    g = bat_complete(cs) and barrier in cs.get("barriers", [])
+    return "Both" if p and g else "Caregiver" if g else "Patient"
+
+
+def answer_compare(c, pid, st):
+    """Patient vs caregiver on the 14 BAT items (age 10+), for the care team only."""
+    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    if not fam or fam["age"] < 10:
+        return None
+    cs = caregiver_state(c, pid) or {}
+    pa, ca = st.get("batAnswers") or {}, cs.get("batAnswers") or {}
+    both = bat_complete(st) and bat_complete(cs)
+    return {
+        "patientDone": bat_complete(st),
+        "caregiverDone": bat_complete(cs),
+        "patient": {k: pa.get(k) for k in BAT_KEYS},
+        "caregiver": {k: ca.get(k) for k in BAT_KEYS},
+        # Only meaningful once both have answered all 14 items.
+        "differ": [k for k in BAT_KEYS if pa.get(k) != ca.get(k)] if both else [],
+        "caregiverWords": cs.get("other", "") if "other" in cs.get("barriers", []) else "",
+    }
+
+
 def sync_tasks(c, pid, state):
     """Keep one task per "yes" barrier for the patient's current assessment.
 
     Runs only once all 14 BAT items are answered. A barrier changed back to "no"
     in the same assessment removes its task only while it has no plan yet.
     """
-    answers = state.get("batAnswers") or {}
-    if not all(answers.get(k) in ("yes", "no") for k in BAT_KEYS):
+    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    # Each person who has finished the 14 items counts. For a family: one task per barrier.
+    voices = [v for v in [state, caregiver_state(c, pid) if fam and fam["age"] >= 10 else None] if v and bat_complete(v)]
+    if not voices:
         return
-    assessment = state.get("batId") or "initial"
-    yes = [b for b in state.get("barriers", []) if b in BARRIER_OWNERS]
+    assessment = "family" if fam else (state.get("batId") or "initial")
+    said = {b for v in voices for b in v.get("barriers", [])}
+    yes = [b for b in BARRIER_OWNERS if b in said]
     existing = {
         r["barrier"]: r
         for r in c.execute(
@@ -626,6 +674,7 @@ def task_view(c, t, st):
         "dueDate": t["due_date"],
         "clockOffsetDays": clock_days(c, t["patient_id"]),
         "isPrimary": st.get("primary") == t["barrier"],
+        "reportedBy": reported_by(c, t["patient_id"], st, t["barrier"]),
         "plan": plan_view(current) if current else None,
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
         # The patient's latest check-back answer for this task, exactly as they wrote it.
@@ -726,6 +775,7 @@ def derive(row, c, chart=False):
                 status = "yellow"
         extra = {
             "family": family_info(c, pid),
+            "answers": answer_compare(c, pid, state),
             "chart": signals,
             # Latest weekly answer is Green but the chart has a flag.
             "chartMismatch": bool(signals["flags"]) and latest == "green",

@@ -364,6 +364,21 @@
       overflow-wrap: anywhere
     }
 
+    table.answers {
+      min-width: 0;
+      margin: 8px 0
+    }
+
+    table.answers td,
+    table.answers th {
+      padding: 7px 10px
+    }
+
+    table.answers tr.differ td {
+      background: #f2f6fa;
+      font-weight: 700
+    }
+
     table.levels {
       min-width: 0;
       max-width: 340px;
@@ -868,7 +883,7 @@
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
         `<span class="muted">Check-back outcome:</span><button class="button small secondary" data-outcome="working" data-task="${t.id}">Working</button><button class="button small secondary" data-outcome="not_working" data-task="${t.id}">Not working</button><button class="button small secondary" data-adjust="${t.id}">Adjust</button>` :
         '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
     }
 
     function stats() {
@@ -977,7 +992,12 @@
       const chartGroup = flagged.length ?
         `<div class="taskgroup" data-group="chart"><h3>Chart flags — for team review <span class="muted">(${flagged.length})</span></h3><div class="list">${flagged.map(chartRow).join('')}</div></div>` :
         '';
-      const body = shown.filter(([g]) => ['overdue', 'today', 'needs'].includes(g)).map(section).join('') + chartGroup +
+      // Patient and caregiver answers differ (age 10+): for the Transplant coordinator to discuss at the visit.
+      const differing = role === 'all' || role === 'Transplant coordinator' ? patients.filter(p => p.answers?.differ?.length) : [];
+      const differGroup = differing.length ?
+        `<div class="taskgroup" data-group="differ"><h3>To discuss at the visit <span class="muted">(${differing.length})</span></h3><div class="list">${differing.map(p=>`<div class="item differrow" data-differ-patient="${esc(p.id)}"><strong>${patientName(p)}</strong><div class="nextaction">→ ${differText(p.answers.differ.length)}</div><div class="meta">${p.answers.differ.map(k=>esc(names[k]||k)).join(' · ')}</div><div style="margin-top:6px"><button class="link" data-open="${esc(p.id)}">View patient →</button></div></div>`).join('')}</div></div>` :
+        '';
+      const body = shown.filter(([g]) => ['overdue', 'today', 'needs'].includes(g)).map(section).join('') + differGroup + chartGroup +
         shown.filter(([g]) => ['coming', 'later'].includes(g)).map(section).join('');
       return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
     }
@@ -997,10 +1017,22 @@
       return `<div class="list">${f.links.map(l=>{const u=inviteUrl(l.token);const who=l.person==='patient'?esc(name)+' (patient)':esc(f.caregiverName)+' (caregiver)';return `<div class="item invite" data-person="${l.person}"><small>${who}</small><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><code class="link-url">${esc(u)}</code><button class="button small secondary" data-copy="${esc(u)}">Copy</button></div></div>`}).join('')}</div><p class="muted">Demo links only. No real SMS is sent. Each link is one person.</p>`
     }
 
+    const differText = n => `Patient and caregiver answers differ on ${n} item${n===1?'':'s'} — worth discussing at the visit.`;
+    const yn = v => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '—';
+
+    // Side-by-side BAT answers (age 10+). Differences are a signal to talk about, not a judgement.
+    function answersTable(p) {
+      const a = p.answers;
+      if (!a) return '';
+      const cg = esc(p.family.caregiverName);
+      const waiting = !a.patientDone || !a.caregiverDone ? `<p class="muted">Waiting for ${[!a.patientDone?esc(p.patientName):'',!a.caregiverDone?cg:''].filter(Boolean).join(' and ')} to answer all 14 items.</p>` : '';
+      return `<div class="item"><small>Barrier answers, side by side</small>${a.differ.length?`<p class="mismatch" id="differNote">${differText(a.differ.length)}</p>`:''}${waiting}<table class="answers" id="answersTable"><thead><tr><th>Item</th><th>Patient</th><th>Caregiver (${cg})</th></tr></thead><tbody>${Object.keys(a.patient).map(k=>`<tr class="${a.differ.includes(k)?'differ':''}" data-item="${k}"><td>${esc(names[k]||k)}${a.differ.includes(k)?' <span class="pill">Differs</span>':''}</td><td>${yn(a.patient[k])}</td><td>${yn(a.caregiver[k])}</td></tr>`).join('')}</tbody></table>${a.caregiverWords&&a.caregiverWords.trim()?`<small>In the caregiver's own words</small><div class="ownwords">${esc(a.caregiverWords)}</div>`:''}</div>`
+    }
+
     function familyPanel(p) {
       const f = p.family;
       if (!f) return '';
-      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong></div><div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
+      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong></div>${answersTable(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
     }
 
     function enroll() {
