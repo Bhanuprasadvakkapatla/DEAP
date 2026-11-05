@@ -723,7 +723,28 @@
       'confusing', 'ranout', 'afford', 'activities', 'refuse', 'inconvenient'
     ];
     const barrierKeys = [...batKeys, 'other'];
-    const strategyKeys = ['reminder', 'routine', 'cue', 'trusted'];
+    // "What might help", by biggest barrier (packet page 5 action plans only).
+    // Barriers with a self-help list: the patient chooses ideas.
+    const strategyOptions = {
+      forget: ['reminder', 'routine', 'cue', 'trusted'],
+      taste: ['taste_flavoring', 'taste_coating', 'taste_popsicle', 'taste_food'],
+      swallow: ['swallow_candy', 'swallow_head', 'swallow_coating'],
+      embarrass: ['embarrass_discreet', 'embarrass_script']
+    };
+    // Barriers without a self-help list: show a message instead of choices.
+    const strategyMessage = {
+      side: 'msgSide',
+      noneed: 'msgNoneed',
+      toomany: 'msgPrescriber',
+      notwork: 'msgPrescriber',
+      confusing: 'msgPrescriber',
+      ranout: 'msgSocial',
+      afford: 'msgSocial',
+      activities: 'msgReachOut',
+      refuse: 'msgReachOut',
+      inconvenient: 'msgReachOut'
+    };
+    const ideasFor = b => strategyOptions[b] || [];
     const T = {
       en: {
         subtitle: 'Your care, your pace.',
@@ -769,10 +790,24 @@
         primaryDesc: 'Pick one. You know your day best.',
         strategyTitle: 'What might help?',
         strategyDesc: 'Choose ideas that sound doable. Your care team will make a plan with you.',
-        reminder: 'Set a reminder at a time I choose',
-        routine: 'Link medicine to something I already do',
-        cue: 'Keep a visible reminder where I will see it',
-        trusted: 'Ask someone I trust to remind me',
+        reminder: 'Phone or app reminders',
+        routine: 'Pair doses with a daily routine, like brushing teeth',
+        cue: "Keep a visible cue where you'll see it",
+        trusted: 'Ask someone you trust to help remind you',
+        taste_flavoring: 'Ask the pharmacist about flavoring',
+        taste_coating: 'Ask about coatings or syrups',
+        taste_popsicle: 'Numb your taste buds with a popsicle first',
+        taste_food: 'Mix with food — only if your team says it is OK',
+        swallow_candy: 'Practice swallowing with small candy',
+        swallow_head: 'Try changing your head position',
+        swallow_coating: 'Ask about coating the pill',
+        embarrass_discreet: 'Carry and take your medicine discreetly',
+        embarrass_script: 'Get a short script for explaining it to friends',
+        msgSide: 'Your care team will talk with you about your medicines. Do not change or stop any medicine on your own.',
+        msgNoneed: 'Your transplant coordinator will talk with you about why this medicine matters.',
+        msgPrescriber: 'Your doctor, nurse practitioner, or pharmacist will talk with you about this.',
+        msgSocial: 'A social worker from your team will reach out to help.',
+        msgReachOut: 'Someone from your care team will reach out to talk with you. You are not in trouble.',
         personalize: 'Make this fit your day',
         personalizeDesc: 'Choose when and how you would like to hear from us.',
         time: 'Best time',
@@ -892,10 +927,24 @@
         primaryDesc: 'Elige uno. Tú conoces mejor tu día.',
         strategyTitle: '¿Qué podría ayudarte?',
         strategyDesc: 'Elige ideas que puedas hacer. Tu equipo hará un plan contigo.',
-        reminder: 'Poner un recordatorio a la hora que elija',
-        routine: 'Unir la medicina a algo que ya hago',
-        cue: 'Dejar una señal visible donde pueda verla',
-        trusted: 'Pedir a alguien de confianza que me recuerde',
+        reminder: 'Recordatorios en el teléfono o en una app',
+        routine: 'Tomar las dosis junto con algo que haces cada día, como cepillarte los dientes',
+        cue: 'Dejar una señal visible donde la veas',
+        trusted: 'Pedir a alguien de confianza que te ayude a recordar',
+        taste_flavoring: 'Preguntar al farmacéutico si le pueden dar sabor',
+        taste_coating: 'Preguntar por cubiertas o jarabes',
+        taste_popsicle: 'Adormecer tu lengua con una paleta de hielo antes',
+        taste_food: 'Mezclarla con comida — solo si tu equipo dice que está bien',
+        swallow_candy: 'Practicar a tragar con dulces pequeños',
+        swallow_head: 'Probar otra posición de la cabeza',
+        swallow_coating: 'Preguntar si se puede cubrir la pastilla',
+        embarrass_discreet: 'Llevar y tomar tu medicina sin que otros lo noten',
+        embarrass_script: 'Tener unas palabras cortas para explicarlo a tus amigos',
+        msgSide: 'Tu equipo de cuidado hablará contigo sobre tus medicinas. No cambies ni dejes ninguna medicina por tu cuenta.',
+        msgNoneed: 'Tu coordinador de trasplante hablará contigo sobre por qué esta medicina es importante.',
+        msgPrescriber: 'Tu médico, enfermera practicante o farmacéutico hablará contigo sobre esto.',
+        msgSocial: 'Un trabajador social de tu equipo se comunicará contigo para ayudarte.',
+        msgReachOut: 'Alguien de tu equipo de cuidado se comunicará contigo para hablar. No estás en problemas.',
         personalize: 'Adapta esto a tu día',
         personalizeDesc: 'Elige cuándo y cómo quieres recibir mensajes.',
         time: 'Mejor hora',
@@ -1057,7 +1106,18 @@
 
     // Onboarding steps that apply: 0 who, 1 BAT, 2 biggest problem (2+ yes), 3 ideas, 4 preferences.
     function onboardSteps() {
-      return [0, 1, ...(s.barriers.length > 1 ? [2] : []), ...(s.barriers.length ? [3] : []), 4];
+      // Step 3 shows ideas or a care-team message for the biggest barrier; skipped when there is neither.
+      const helpStep = s.barriers.length && (!s.primary || ideasFor(s.primary).length || strategyMessage[s
+        .primary]);
+      return [0, 1, ...(s.barriers.length > 1 ? [2] : []), ...(helpStep ? [3] : []), 4];
+    }
+
+    function helpStep() {
+      // Keep only ideas that belong to the current biggest barrier.
+      s.strategies = s.strategies.filter(k => ideasFor(s.primary).includes(k));
+      const msg = strategyMessage[s.primary];
+      return msg ? `<div class="card soft" id="helpMessage"><p style="margin:0">${t(msg)}</p></div>` :
+        choices(ideasFor(s.primary), s.strategies, true)
     }
 
     const batUnanswered = () => batKeys.filter(k => !['yes', 'no'].includes(s.batAnswers[k]));
@@ -1085,7 +1145,7 @@
       if (step === 2) out += header(eyebrow, t('primaryTitle'), t('primaryDesc')) + choices(s
         .barriers, s.primary, false);
       if (step === 3) out += header(eyebrow, t('strategyTitle'),
-        t('strategyDesc')) + choices(strategyKeys, s.strategies, true);
+        strategyMessage[s.primary] ? '' : t('strategyDesc')) + helpStep();
       if (step === 4) out += header(eyebrow, t('personalize'),
           t('personalizeDesc')) + prefs() +
         `<div class="card soft"><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div></div>`;
@@ -1215,6 +1275,7 @@
         if (s.step === 1) batTried = false;
         if (s.step === 2 && !s.primary) return notice(t('chooseOne'));
         if (s.step === 4) {
+          s.strategies = s.strategies.filter(k => ideasFor(s.primary).includes(k));
           s.plan = s.strategies.map(k => t(k)).join(' + ') || t('planDefault');
           return go('today')
         }

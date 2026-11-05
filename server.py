@@ -108,6 +108,19 @@ def init():
                 ("Drew", ["confusing", "notwork"], "green"),
                 ("Parker", ["noneed"], "yellow"),
             ]
+            # Ideas the demo patients picked (same wording as patient.html). Barriers that only
+            # get a care-team message have no ideas.
+            seed_ideas = {
+                "forget": [
+                    ("reminder", "Phone or app reminders"),
+                    ("routine", "Pair doses with a daily routine, like brushing teeth"),
+                ],
+                "taste": [("taste_flavoring", "Ask the pharmacist about flavoring")],
+                "swallow": [("swallow_candy", "Practice swallowing with small candy")],
+                "embarrass": [
+                    ("embarrass_discreet", "Carry and take your medicine discreetly")
+                ],
+            }
             for i, (name, yes, status) in enumerate(sample):
                 barrier = yes[0]
                 state = {
@@ -122,8 +135,9 @@ def init():
                     "barriers": [k for k in BARRIER_KEYS if k in yes],
                     "batAnswers": {k: "yes" if k in yes else "no" for k in BAT_KEYS},
                     "batId": iso(NOW() - timedelta(days=3)),
-                    "strategies": ["reminder"],
-                    "plan": "Use a reminder with a routine",
+                    "strategies": [k for k, _ in seed_ideas.get(barrier, [])],
+                    "plan": " + ".join(text for _, text in seed_ideas.get(barrier, []))
+                    or "Talk with your care team to make a plan that fits your day.",
                     "daily": [
                         {
                             "date": (NOW() - timedelta(days=j)).date().isoformat(),
