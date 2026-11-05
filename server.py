@@ -129,8 +129,11 @@ def derive(row, c):
             else "yellow" if last and last[-1].get("status") == "yellow" else "green"
         )
     )
-    if stage in ("clinician_review", "caregiver_notice"):
-        status = "red" if stage == "clinician_review" else "yellow"
+    # An overdue stage can raise the status but never lower it.
+    overdue = {"clinician_review": "red", "caregiver_notice": "yellow"}.get(stage)
+    rank = {"blue": 0, "green": 1, "yellow": 2, "red": 3}
+    if overdue and rank[overdue] > rank[status]:
+        status = overdue
     return dict(
         **state,
         id=pid,
