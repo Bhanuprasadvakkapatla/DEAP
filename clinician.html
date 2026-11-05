@@ -343,6 +343,18 @@
       margin-top: 4px
     }
 
+    .patientctx {
+      display: grid;
+      gap: 4px;
+      margin: 6px 0;
+      font-size: 14px
+    }
+
+    .patientsays small {
+      color: #688090;
+      font-weight: 700
+    }
+
     .planform {
       display: grid;
       grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
@@ -700,6 +712,22 @@
     ];
     const planInputIds = [...PLAN_INPUTS.map(([k]) => 'plan_' + k), 'plan_patientText'];
 
+    const answerNames = {
+      working: "Yes, it's working",
+      not_really: 'Not really',
+      change: 'I want to change it'
+    };
+    // What the patient said at check-back (their words exactly) and their latest weekly answer.
+    function patientSays(t) {
+      const a = t.patientAnswer,
+        w = t.latestWeekly;
+      const ans = a ? `<div class="patientsays"><small>Patient says</small> <strong style="display:inline">${esc(answerNames[a.answer]||a.answer)}</strong>${a.note&&a.note.trim()?`<div class="ownwords">${esc(a.note)}</div>`:''}<div class="meta">${esc(longDate(a.at))} · ${a.for===t.dueDate?'for this check-back':'for an earlier check-back'}</div></div>` :
+        '<div class="meta">No check-back answer from the patient yet.</div>';
+      const wk = w ? `<div class="meta">Latest weekly answer: <strong style="display:inline">${esc(w.status.charAt(0).toUpperCase()+w.status.slice(1))}</strong> · ${esc(shortDate(w.date))}${w.note&&w.note.trim()?' · “'+esc(w.note)+'”':''}</div>` :
+        '<div class="meta">No weekly answer yet.</div>';
+      return `<div class="patientctx">${ans}${wk}</div>`
+    }
+
     function planSummary(pl) {
       return `<div class="plansum">${PLAN_INPUTS.map(([k,label])=>`<div><small>${label}</small> ${esc(pl[k])}</div>`).join('')}<div class="patientsees"><small>Patient sees</small><div class="ownwords">${esc(pl.patientText)}</div></div><div class="meta">Agreed ${esc(longDate(pl.createdAt))} · ${esc(pl.createdBy)}</div></div>`
     }
@@ -717,7 +745,7 @@
       const who = esc(t.patientName || 'Patient') + (t.patientLastInitial ? ' ' + esc(t.patientLastInitial) + '.' : '');
       const head = showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`;
       const action = t.status === 'needs_plan' && planFormFor !== t.id ? `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan):''}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}</div>${planFormFor===t.id?planForm(t):''}</div>`
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}</div>${planFormFor===t.id?planForm(t):''}</div>`
     }
 
     function stats() {

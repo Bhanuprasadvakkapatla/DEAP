@@ -63,6 +63,12 @@ TASK_STATUSES = ("needs_plan", "plan_agreed", "keep_checking")
 CHECK_BACK_DAYS = 14
 # The five parts of a concrete plan, plus the version the patient sees.
 PLAN_FIELDS = ("who", "what", "how", "where", "when", "patientText")
+# Patient check-back answers ("Is your plan working?"), stored in the patient's own state.
+CHECK_ANSWERS = {
+    "working": "Yes, it's working",
+    "not_really": "Not really",
+    "change": "I want to change it",
+}
 NOW = lambda: datetime.now(timezone.utc)
 
 
@@ -232,6 +238,26 @@ def sync_tasks(c, pid, state):
             event(c, pid, "task_removed", f"Patient changed '{b}' to No; open task removed")
 
 
+def log_checkbacks(c, pid, old, new):
+    """Record each new patient check-back answer, so history is kept when a later one replaces it."""
+    for k, v in new.items():
+        if old.get(k) == v:
+            continue
+        t = c.execute(
+            "SELECT barrier FROM tasks WHERE id=? AND patient_id=?", (int(k), pid)
+        ).fetchone()
+        if not t:
+            continue
+        note = v.get("note", "")
+        event(
+            c,
+            pid,
+            "check_back",
+            f"Patient check-back for '{t['barrier']}': {CHECK_ANSWERS[v['answer']]}"
+            + (f' (patient wrote: "{note}")' if note.strip() else ""),
+        )
+
+
 def plan_view(p):
     return {
         "id": p["id"],
@@ -267,6 +293,9 @@ def task_view(c, t, st):
         "isPrimary": st.get("primary") == t["barrier"],
         "plan": plan_view(current) if current else None,
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
+        # The patient's latest check-back answer for this task, exactly as they wrote it.
+        "patientAnswer": (st.get("checkbacks") or {}).get(str(t["id"])),
+        "latestWeekly": (st.get("weekly") or [None])[-1],
         # Patient context shown next to the plan form (read-only).
         "strategies": st.get("strategies", []),
         # The patient's own words, exactly as written ("Something else").
@@ -487,6 +516,20 @@ def validate_state(state):
     for key in ("silence", "shift"):
         if key in state and type(state[key]) != bool:
             return "Invalid " + key
+    checks = state.get("checkbacks", {})
+    if not isinstance(checks, dict) or len(checks) > 200:
+        return "Invalid checkbacks"
+    for k, v in checks.items():
+        if (
+            not k.isdigit()
+            or not isinstance(v, dict)
+            or v.get("answer") not in CHECK_ANSWERS
+            or not isinstance(v.get("note", ""), str)
+            or len(v.get("note", "")) > 400
+            or not isinstance(v.get("at", ""), str)
+            or not isinstance(v.get("for", ""), str)
+        ):
+            return "Invalid check-back answer"
     return None
 
 
@@ -610,7 +653,7 @@ class Handler(SimpleHTTPRequestHandler):
             old = json.loads(existing["state"]) if existing else {}
             activity = not existing or any(
                 state.get(k) != old.get(k)
-                for k in ("daily", "weekly", "contactRequests")
+                for k in ("daily", "weekly", "contactRequests", "checkbacks")
             )
             when = iso() if activity else existing["last_engagement"]
             c.execute(
@@ -634,6 +677,7 @@ class Handler(SimpleHTTPRequestHandler):
                     )
             if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers", "batId")):
                 sync_tasks(c, pid, state)
+            log_checkbacks(c, pid, old.get("checkbacks") or {}, state.get("checkbacks") or {})
             row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
             recalc(c, row)
             reply = {"patient": derive(row, c)}

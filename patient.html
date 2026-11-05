@@ -847,6 +847,12 @@
         plan: 'My plan',
         planFor: 'For',
         planDefault: 'Your care team will make a plan with you.',
+        checkTitle: 'Is your plan working?',
+        check_working: "Yes, it's working",
+        check_not_really: 'Not really',
+        check_change: 'I want to change it',
+        checkSend: 'Send my answer',
+        checkThanks: 'Thanks for telling us. Your care team will see your answer.',
         took: 'I took my medicine',
         missed: 'I missed a dose',
         done: 'Thanks for checking in',
@@ -985,6 +991,12 @@
         plan: 'Mi plan',
         planFor: 'Para',
         planDefault: 'Tu equipo de cuidado hará un plan contigo.',
+        checkTitle: '¿Te está funcionando tu plan?',
+        check_working: 'Sí, me está funcionando',
+        check_not_really: 'No mucho',
+        check_change: 'Quiero cambiarlo',
+        checkSend: 'Enviar mi respuesta',
+        checkThanks: 'Gracias por contarnos. Tu equipo de cuidado verá tu respuesta.',
         took: 'Tomé mi medicina',
         missed: 'No tomé una dosis',
         done: 'Gracias por responder',
@@ -1060,6 +1072,8 @@
       daily: [],
       weekly: [],
       contactRequests: 0,
+      // Patient's answers to "Is your plan working?", keyed by task id.
+      checkbacks: {},
       silence: false
     });
     let s;
@@ -1076,7 +1090,15 @@
     // Agreed plans from the care team (clinician-owned; never saved in the patient's state).
     let deapPlans = [],
       deapPlansKey = '[]',
-      deapRenderPending = false;
+      deapRenderPending = false,
+      // Demo-only clock offset in days for this patient's check-backs (set by the clinician page).
+      deapClockDays = 0,
+      // Unsent check-back answer while the patient is choosing.
+      checkDraft = {
+        taskId: null,
+        answer: '',
+        note: ''
+      };
     // Set after a Continue tap with unanswered BAT items, to highlight them.
     let batTried = false;
     const t = k => T[s.lang][k] || k;
@@ -1179,6 +1201,24 @@
       return `<label class="label" for="time">${t('time')}</label><input id="time" class="field" type="time" value="${esc(s.time)}" ${s.shift?'disabled':''}><label class="choice" style="font-size:13px"><span>${t('shift')}</span><input id="shift" type="checkbox" ${s.shift?'checked':''} aria-label="${esc(t('shift'))}"></label><label class="label" for="channel">${t('channel')}</label><select id="channel" class="field">${['SMS','WhatsApp','Email'].map(x=>`<option ${s.channel===x?'selected':''}>${x}</option>`).join('')}</select><label class="label" for="tone">${t('tone')}</label><select id="tone" class="field">${['friendly','short','encouraging'].map(x=>`<option value="${x}" ${s.tone===x?'selected':''}>${t(x)}</option>`).join('')}</select><label class="label" for="routine">${t('routineLabel')}</label><input id="routine" class="field" maxlength="90" value="${esc(s.routine)}" placeholder="${esc(t('routinePlaceholder'))}">`
     }
 
+    // Check-back: due when the plan's check-back day has arrived (local calendar day).
+    const localDay = d => new Date(d).toLocaleDateString('en-CA');
+    const effectiveNow = () => new Date(Date.now() + deapClockDays * 864e5);
+    const isDue = p => !!p.dueDate && localDay(p.dueDate) <= localDay(effectiveNow());
+    // First plan (biggest problem first) whose current check-back the patient has not answered.
+    const dueCheck = () => deapPlans.find(p => isDue(p) && (s.checkbacks || {})[p.taskId]?.for !== p.dueDate);
+
+    function checkBackCard() {
+      const p = dueCheck();
+      if (!p) return '';
+      if (checkDraft.taskId !== p.taskId) checkDraft = {
+        taskId: p.taskId,
+        answer: '',
+        note: ''
+      };
+      return `<div class="card" id="checkBack"><div class="iconbubble">✓</div><h3>${t('checkTitle')}</h3><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?'✓':'○'}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
+    }
+
     // Plans the care team agreed with the patient (from the server), in the patient's own words.
     function myPlans() {
       return `<div class="card soft" id="myPlan"><div class="small">${t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
@@ -1191,7 +1231,7 @@
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        checkBackCard() + myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
@@ -1332,6 +1372,27 @@
         save();
         return notice(t('contactDone'))
       }
+      if (a === 'sendCheck') {
+        const p = deapPlans.find(x => x.taskId === checkDraft.taskId);
+        if (!p) return;
+        if (!checkDraft.answer) return notice(t('chooseOne'));
+        // Patient-owned answer, kept exactly as written.
+        s.checkbacks = Object.assign({}, s.checkbacks, {
+          [p.taskId]: {
+            answer: checkDraft.answer,
+            note: checkDraft.note,
+            at: new Date().toISOString(),
+            for: p.dueDate
+          }
+        });
+        checkDraft = {
+          taskId: null,
+          answer: '',
+          note: ''
+        };
+        save();
+        return notice(t('checkThanks'))
+      }
       if (a === 'submitWeekly') {
         if (!s.draftWeekly) return notice(t('chooseOne'));
         s.weekly.push({
@@ -1370,6 +1431,13 @@
         handleAction(a.dataset.action);
         return
       }
+      const chk = e.target.closest('[data-check]');
+      if (chk) {
+        checkDraft.answer = chk.dataset.check;
+        render();
+        document.querySelector(`[data-check="${checkDraft.answer}"]`)?.focus();
+        return
+      }
       const bat = e.target.closest('[data-bat]');
       if (bat) {
         const k = bat.dataset.bat,
@@ -1405,6 +1473,10 @@
       if (['patientName', 'caregiverName'].includes(id)) s[id] = e.target.value;
       if (id === 'other') s.other = e.target.value;
       if (id === 'weeklyNote') s.draftNote = e.target.value;
+      if (id === 'checkNote') {
+        checkDraft.note = e.target.value;
+        return
+      }
       if (['routine', 'time', 'patientName'].includes(id)) {
         s[id] = e.target.value;
         save();
