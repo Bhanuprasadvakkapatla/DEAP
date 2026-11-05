@@ -553,7 +553,7 @@
     }
 
     function table(items) {
-      return `<div class="panel"><div class="toolbar"><input id="search" type="search" placeholder="Search fictional patient names…" value="${esc(search)}" aria-label="Search patients"><select id="filter" aria-label="Filter by status"><option value="all">All statuses</option>${Object.entries(statuses).map(([k,v])=>`<option value="${k}" ${filter===k?'selected':''}>${v}</option>`).join('')}</select></div><div class="scroll"><table><thead><tr><th>Patient</th><th>Primary barrier</th><th>Last check-in</th><th>Support requests</th><th>Status</th><th>Action</th></tr></thead><tbody>${items.length?items.map(p=>`<tr data-id="${esc(p.id)}"><td><div class="name">${patientName(p)}</div><div class="meta">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—'):'Patient'} · ${esc(p.lang?.toUpperCase()||'EN')}</div></td><td>${esc(names[p.primary]||'Not assessed')}</td><td>${shortDate(p.lastEngagement)}</td><td>${p.contactRequests||0}</td><td>${pill(p.status)}<div class="meta">${esc((p.attentionReasons||[]).join(' · '))}</div></td><td><button class="link" data-open="${esc(p.id)}">View details →</button></td></tr>`).join(''):`<tr><td colspan="6" class="empty">No patients match your filters.</td></tr>`}</tbody></table></div></div>`
+      return `<div class="panel"><div class="toolbar"><input id="search" type="search" placeholder="Search fictional patient names…" value="${esc(search)}" aria-label="Search patients"><select id="filter" aria-label="Filter by status"><option value="all">All statuses</option>${Object.entries(statuses).map(([k,v])=>`<option value="${k}" ${filter===k?'selected':''}>${v}</option>`).join('')}</select></div><div class="scroll"><table><thead><tr><th>Patient</th><th>Primary barrier</th><th>Last check-in</th><th>Support requests</th><th>Status</th><th>Action</th></tr></thead><tbody>${items.length?items.map(p=>`<tr data-id="${esc(p.id)}"><td><div class="name">${patientName(p)}</div><div class="meta">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—'):'Patient'} · ${esc(p.lang?.toUpperCase()||'EN')}</div></td><td>${esc(names[p.primary]||'Not assessed')}</td><td>${shortDate(p.lastEngagement)}</td><td>${p.openRequests||0} open<div class="meta">${p.contactRequests||0} total</div></td><td>${pill(p.status)}<div class="meta">${esc((p.attentionReasons||[]).join(' · '))}</div></td><td><button class="link" data-open="${esc(p.id)}">View details →</button></td></tr>`).join(''):`<tr><td colspan="6" class="empty">No patients match your filters.</td></tr>`}</tbody></table></div></div>`
     }
 
     function overview() {
@@ -568,7 +568,7 @@
       const w = p.weekly || [],
         last = w.at(-1),
         daily = p.daily || [];
-      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers</small><strong>${esc((p.barriers||[]).map(k=>names[k]||k).join(', ')||'—')}</strong></div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).join(', ')||'—')}</strong></div><div class="item"><small>Patient-selected plan</small><strong>${esc(p.plan||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.contactRequests||0}</strong></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
+      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers</small><strong>${esc((p.barriers||[]).map(k=>names[k]||k).join(', ')||'—')}</strong></div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).join(', ')||'—')}</strong></div><div class="item"><small>Patient-selected plan</small><strong>${esc(p.plan||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong><div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
     }
 
     function reports() {
@@ -643,6 +643,29 @@
       if (e.target.id === 'refresh') {
         await refresh();
         render();
+        return
+      }
+      if (e.target.id === 'markHandled' && selected) {
+        const button = e.target;
+        button.disabled = true;
+        try {
+          const r = await fetch('/api/patients/' + encodeURIComponent(selected) + '/requests', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              action: 'handled'
+            })
+          });
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to update');
+          await refresh();
+          render()
+        } catch (err) {
+          button.disabled = false;
+          const x = el('handledResult');
+          if (x) x.textContent = 'Could not update: ' + err.message
+        }
         return
       }
       if (e.target.id === 'savePlan' && selected) {

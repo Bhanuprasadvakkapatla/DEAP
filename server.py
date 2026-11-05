@@ -37,6 +37,13 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL, at TEXT NOT NULL)"
         )
+        # Clinician-owned count of support requests already handled. Kept outside the
+        # patient's state because the patient page overwrites state on every sync.
+        cols = [r["name"] for r in c.execute("PRAGMA table_info(patients)")]
+        if "handled_requests" not in cols:
+            c.execute(
+                "ALTER TABLE patients ADD COLUMN handled_requests INTEGER NOT NULL DEFAULT 0"
+            )
         if c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0:
             sample = [
                 ("Alex", "schedule", "yellow"),
@@ -83,7 +90,7 @@ def init():
                     "silence": False,
                 }
                 c.execute(
-                    "INSERT INTO patients VALUES (?,?,?,?,?,?)",
+                    "INSERT INTO patients(id,state,care_plan,updated_at,last_engagement,demo_offset_hours) VALUES (?,?,?,?,?,?)",
                     (
                         f"demo-{i+1:02}",
                         json.dumps(state),
@@ -108,7 +115,10 @@ def derive(row, c):
     er = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
     stage = er["stage"] if er else "none"
     reasons = []
-    if state.get("contactRequests"):
+    total_requests = state.get("contactRequests") or 0
+    handled = min(row["handled_requests"], total_requests)
+    open_requests = total_requests - handled
+    if open_requests:
         reasons.append("Support requested")
     if state.get("silence"):
         reasons.append("Demo silence flag")
@@ -123,7 +133,7 @@ def derive(row, c):
         if not state.get("barriers")
         else (
             "red"
-            if state.get("contactRequests")
+            if open_requests
             or state.get("silence")
             or (last and last[-1].get("status") == "red")
             else "yellow" if last and last[-1].get("status") == "yellow" else "green"
@@ -148,6 +158,8 @@ def derive(row, c):
             + row["demo_offset_hours"],
         ),
         carePlan=row["care_plan"],
+        handledRequests=handled,
+        openRequests=open_requests,
         status=status,
         escalation={
             "stage": stage,
@@ -298,7 +310,8 @@ class Handler(SimpleHTTPRequestHandler):
     def route(self):
         path = unquote(urlparse(self.path).path)
         m = re.fullmatch(
-            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate))?", path
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests))?",
+            path,
         )
         return path, m
 
@@ -419,6 +432,22 @@ class Handler(SimpleHTTPRequestHandler):
                     "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
                 )
                 event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
+            elif action == "requests":
+                if data.get("action") != "handled":
+                    return self.json({"error": "Invalid action"}, 400)
+                total = json.loads(row["state"]).get("contactRequests") or 0
+                newly = total - min(row["handled_requests"], total)
+                if newly <= 0:
+                    return self.json({"error": "No open support requests"}, 409)
+                c.execute(
+                    "UPDATE patients SET handled_requests=? WHERE id=?", (total, pid)
+                )
+                event(
+                    c,
+                    pid,
+                    "request_handled",
+                    f"Clinician portal (demo, no login) marked {newly} support request(s) handled; {total} received in total",
+                )
             elif action == "escalation":
                 if data.get("action") not in ("acknowledge", "resolve"):
                     return self.json({"error": "Invalid action"}, 400)
