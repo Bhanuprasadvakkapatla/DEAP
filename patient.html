@@ -757,7 +757,9 @@
       afford: 'msgSocial',
       activities: 'msgReachOut',
       refuse: 'msgReachOut',
-      inconvenient: 'msgReachOut'
+      inconvenient: 'msgReachOut',
+      // "Something else" has no packet action plan; the team set this message.
+      other: 'msgOther'
     };
     const ideasFor = b => strategyOptions[b] || [];
     const T = {
@@ -823,6 +825,7 @@
         msgPrescriber: 'Your doctor, nurse practitioner, or pharmacist will talk with you about this.',
         msgSocial: 'A social worker from your team will reach out to help.',
         msgReachOut: 'Someone from your care team will reach out to talk with you. You are not in trouble.',
+        msgOther: 'Thanks for telling us in your own words. Your transplant coordinator will read it and talk with you.',
         personalize: 'Make this fit your day',
         personalizeDesc: 'Choose when and how you would like to hear from us.',
         time: 'Best time',
@@ -967,6 +970,7 @@
         msgPrescriber: 'Tu médico, enfermera practicante o farmacéutico hablará contigo sobre esto.',
         msgSocial: 'Un trabajador social de tu equipo se comunicará contigo para ayudarte.',
         msgReachOut: 'Alguien de tu equipo de cuidado se comunicará contigo para hablar. No estás en problemas.',
+        msgOther: 'Gracias por contarnos con tus propias palabras. Tu coordinador de trasplante lo leerá y hablará contigo.',
         personalize: 'Adapta esto a tu día',
         personalizeDesc: 'Elige cuándo y cómo quieres recibir mensajes.',
         time: 'Mejor hora',
