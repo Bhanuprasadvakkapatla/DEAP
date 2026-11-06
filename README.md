@@ -82,7 +82,7 @@ The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link o
 
 **Hand-off of responsibility.** "Who leads" (set at enrollment, changeable in patient detail; every change is logged) decides who gets reminders and "Is your plan working?" check-backs: Parent leads → caregiver; Shared → both; Patient leads → patient only. A caregiver is only asked about plans the patient shares with them. Under 10 the caregiver always gets them. For Patient leads the 24-hour caregiver-notice stage is skipped (clinician review only).
 
-New Spanish text for families (who sees what, sharing, hand-off, the Progress tab) is a draft translation for the clinical team to review.
+New Spanish text for families (who sees what, sharing, hand-off, the Progress tab, the small headings above screens) is a draft translation for the clinical team to review.
 
 **Progress tab, no scoreboard.** The packet calls streaks that punish a missed day weak. The Progress tab shows one positive number (days you checked in, last 30 days), a calendar that marks check-in days with a ✓ and leaves other days neutral, and "Missed a day? That's okay. Tell us what got in the way." There are no streaks, resetting counters, points or badges. The "I missed a dose" button on Today still records the answer for the care team.
 

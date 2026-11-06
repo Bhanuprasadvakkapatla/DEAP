@@ -825,6 +825,12 @@
     const T = {
       en: {
         subtitle: 'Your care, your pace.',
+        // Small headings above screens.
+        eb_checkin: 'CHECK-IN',
+        eb_journey: 'YOUR JOURNEY',
+        eb_space: 'YOUR SPACE',
+        eb_support: 'SUPPORT',
+        eb_thanks: 'THANK YOU',
         patientNameLabel: 'Patient first name',
         caregiverNameLabel: 'Caregiver first name',
         nameRequired: 'Please enter the patient name.',
@@ -1025,6 +1031,12 @@
       },
       es: {
         subtitle: 'Tu cuidado, a tu ritmo.',
+        // Small headings above screens: draft translation for the clinical team to review.
+        eb_checkin: 'REGISTRO',
+        eb_journey: 'TU CAMINO',
+        eb_space: 'TU ESPACIO',
+        eb_support: 'APOYO',
+        eb_thanks: 'GRACIAS',
         patientNameLabel: 'Nombre del paciente',
         caregiverNameLabel: 'Nombre del cuidador',
         nameRequired: 'Escribe el nombre del paciente.',
@@ -1368,6 +1380,10 @@
 
     async function sendText(body) {
       try {
+        // Send any unsent change first (such as a new language), so the reply uses it straight away.
+        clearTimeout(deapSyncTimer);
+        deapPush();
+        await deapSending;
         await fetch('/api/sms/inbound', {
           method: 'POST',
           headers: {
@@ -1602,7 +1618,7 @@
     }
 
     function weekly() {
-      return header('CHECK-IN', t('weeklyTitle'), t('weeklyDesc')) +
+      return header(t('eb_checkin'), t('weeklyTitle'), t('weeklyDesc')) +
         myPlans() +
         choices(['green', 'yellow', 'red'], s.draftWeekly || '', false) +
         `<label class="label" for="weeklyNote">${t('note')}</label><textarea id="weeklyNote" class="field" rows="3" maxlength="400">${esc(s.draftNote||'')}</textarea><div style="height:14px"></div>${btn(t('send'),'submitWeekly')}` +
@@ -1623,13 +1639,13 @@
       }).join('');
       // Latest weekly answer, from the app or by text reply.
       const last = allWeekly().at(-1);
-      return header('YOUR JOURNEY', t('progressTitle'), t('progressDesc')) +
+      return header(t('eb_journey'), t('progressTitle'), t('progressDesc')) +
         `<div class="statrow">${checkedDays?`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><strong>${checkedDays}</strong><span>${t('daysCheckedIn')} · ${t('last30')}</span></div>`:`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><span style="font-size:15px">${t('checkinsEmpty')}</span></div>`}<div class="stat" style="grid-column:1/-1"><strong id="latestWeekly" style="color:${last?.status==='yellow'?'#81550d':last?.status==='red'?'#9d3b2c':'#0d6d58'}${last?'':';font-size:17px'}">${last?t(last.status).split(' — ')[0]:t('noWeekly')}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p id="missedOk">${t('missedOk')}</p><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
         foot()
     }
 
     function settings() {
-      return header('YOUR SPACE', t('settingsTitle'), t('personalizeDesc')) +
+      return header(t('eb_space'), t('settingsTitle'), t('personalizeDesc')) +
         // With a personal link, who is answering comes from the link: no name fields, no role switch.
         `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}${s.role!=='caregiver'?`<label class="choice" style="font-size:13px"><span>${t('discreetLabel')}</span><input id="discreet" type="checkbox" ${isDiscreet()?'checked':''}></label>`:''}${isOwner()?`<label class="choice" style="font-size:13px"><span>${t('textLabel')}</span><input id="textCheckin" type="checkbox" ${s.textCheckin?'checked':''}></label>`:''}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${bat_done()?btn(t('retakeChanged'),'retake','secondary'):''}<div style="height:9px"></div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
@@ -1657,17 +1673,17 @@
         foot();
       else if (s.view === 'onboard') html += onboarding();
       else if (s.view === 'today') html += today();
-      else if (s.view === 'missed') html += header('SUPPORT', t('missTitle'), t('missText')) +
+      else if (s.view === 'missed') html += header(t('eb_support'), t('missTitle'), t('missText')) +
         `<div class="card soft"><h3>${t('support')}</h3><p>${t('missText')}</p>${btn(t('contact'),'contact')}</div>${btn(t('backToday'),'today','secondary')}` +
         foot();
       else if (s.view === 'done') html +=
-        `<div class="iconbubble">✓</div>${header('THANK YOU',t('done'),t('doneSub'))}${btn(t('backToday'),'today')}` +
+        `<div class="iconbubble">✓</div>${header(t('eb_thanks'),t('done'),t('doneSub'))}${btn(t('backToday'),'today')}` +
         foot();
       else if (s.view === 'weekly') html += weekly();
       else if (s.view === 'weeklyDone') {
         const last = s.weekly.at(-1);
         html +=
-          `<div class="iconbubble">♡</div>${header('CHECK-IN',t('thanks'),t('thanksDesc'))}<div class="card"><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${t(last?.status||'green')}</span><p>${t('swap')}</p>${btn(t('contact'),'contact','outline')}</div>${btn(t('backToday'),'today')}` +
+          `<div class="iconbubble">♡</div>${header(t('eb_checkin'),t('thanks'),t('thanksDesc'))}<div class="card"><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${t(last?.status||'green')}</span><p>${t('swap')}</p>${btn(t('contact'),'contact','outline')}</div>${btn(t('backToday'),'today')}` +
           foot()
       } else if (s.view === 'progress') html += progress();
       else if (s.view === 'settings') html += settings();
