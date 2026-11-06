@@ -1050,7 +1050,8 @@
         'Care team: sees everything.',
         `${pt}: sees their own answers, own words, plans and check-backs; never ${cg}'s checklist answers.`,
         `${cg}: sees their own answers and upcoming check-back dates; not ${pt}'s checklist answers, own words, weekly ratings or check-back notes.`,
-        `${pt}'s plans shared with ${cg}: <b id="sharePlansNow">${sh.plans?'On':'Off'}</b> · weekly check-in shared: <b id="shareWeeklyNow">${sh.weekly?'On':'Off'}</b> (${pt}'s choice)`
+        `${pt}'s plans shared with ${cg}: <b id="sharePlansNow">${sh.plans?'On':'Off'}</b> · weekly check-in shared: <b id="shareWeeklyNow">${sh.weekly?'On':'Off'}</b> (${pt}'s choice)`,
+        `${pt}'s discreet mode (neutral words in texts and previews): <b id="discreetNow">${(typeof p.discreet==='boolean'?p.discreet:f.age>=10&&f.age<=17)?'On':'Off'}</b>`
       ];
       return `<div class="item" id="whoSeesSummary"><small>Who sees what</small><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul><div class="meta">Proposed privacy rules for the demo; the clinical team decides the real rules.</div></div>`
     }

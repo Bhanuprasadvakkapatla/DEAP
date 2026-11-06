@@ -1030,7 +1030,7 @@ def validate_state(state):
         or not 0 <= state.get("contactRequests", 0) <= 100000
     ):
         return "Invalid support request count"
-    for key in ("silence", "shift", "sharePlans", "shareWeekly"):
+    for key in ("silence", "shift", "sharePlans", "shareWeekly", "discreet"):
         if key in state and type(state[key]) != bool:
             return "Invalid " + key
     checks = state.get("checkbacks", {})

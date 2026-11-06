@@ -83,6 +83,8 @@ The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link o
 
 New Spanish text for families (who sees what, sharing, hand-off) is a draft translation for the clinical team to review.
 
+**Discreet mode** (patient setting; default on for ages 10–17): the invite preview, reminder previews, the app header and the tab title use neutral words with no "transplant", "medicine", "pills" or "dose" (for example "Hi Maya, your check-in is ready (1 min)."). Inside the app the normal wording stays. Spanish discreet wording is a draft.
+
 **Demo families** (fictional, based on the packet personas; their links are in each patient's detail): **Maya R., 15, Shared**: Maya and her mom Laura both answered; they differ on one item. **Jordan P., 20, Patient leads**: own words about the hand-off from Mom; Mom (Denise) has a link but has not answered. **Leo S., 8, Parent leads, Spanish**: his mom Ana is the user (caregiver link only).
 
 ### Chart risk signals (demo — no real EHR)
