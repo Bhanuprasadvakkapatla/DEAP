@@ -3,16 +3,122 @@
  <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
-  <meta content="#0b2037" name="theme-color"/>
+  <meta content="#0f2333" name="theme-color"/>
   <title>
-   DEAP Connect | Patient &amp; Family
+   KTx-CONNECT | Patient &amp; Family
   </title>
   <style>
+    /* Calm, quiet look for teens and caregivers: one accent colour, soft cards, line icons, no
+       gamified effects. Colours are tokens so light and dark mode share every rule below.
+       Dark mode follows the phone unless the person picks Light or Dark in Settings. */
     :root {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #183047;
-      background: #eaf0f3;
-      font-synthesis: none
+      --bg: #eef2f4;
+      --surface: #ffffff;
+      --surface-2: #f3f6f7;
+      --soft: #e9f5f0;
+      --soft-border: #cfe6dc;
+      --border: #d9e3e6;
+      --field-border: #7b8e98;
+      --text: #13212d;
+      --text-2: #44576a;
+      --text-3: #4f6270;
+      --accent: #0d7560;
+      --accent-hover: #0a6150;
+      --on-accent: #ffffff;
+      --accent-ink: #0b6652;
+      --accent-soft: #dff1e9;
+      --header-bg: #0f2333;
+      --header-text: #ffffff;
+      --header-sub: #c9d7df;
+      --header-line: #6f8b99;
+      --yellow-bg: #fff2d4;
+      --yellow-ink: #6f4a08;
+      --red-bg: #fde7e2;
+      --red-ink: #8f2f22;
+      --blue-bg: #e5eef9;
+      --blue-ink: #234f7c;
+      --toast-bg: #13293a;
+      --toast-text: #ffffff;
+      --shadow: 0 1px 2px rgba(15, 35, 51, .05), 0 6px 18px rgba(15, 35, 51, .06);
+      --focus: #2c8f78;
+      --frame: #0f2333;
+      color-scheme: light;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      font-synthesis: none;
+      -webkit-text-size-adjust: 100%
+    }
+
+    /* Dark tokens: used when the phone is in dark mode (unless Light is chosen), or when Dark is chosen. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0b1218;
+        --surface: #141e27;
+        --surface-2: #1a2631;
+        --soft: #13261f;
+        --soft-border: #22423a;
+        --border: #263744;
+        --field-border: #6f8696;
+        --text: #e8eff3;
+        --text-2: #b2c1cb;
+        --text-3: #a9b9c4;
+        --accent: #5fd0ae;
+        --accent-hover: #7ddcbf;
+        --on-accent: #062018;
+        --accent-ink: #79dcbd;
+        --accent-soft: #183a31;
+        --header-bg: #08111a;
+        --header-text: #f2f7fa;
+        --header-sub: #b7c6cf;
+        --header-line: #4d6574;
+        --yellow-bg: #3a2e10;
+        --yellow-ink: #f2d38a;
+        --red-bg: #3e1c18;
+        --red-ink: #f7b4a8;
+        --blue-bg: #16283b;
+        --blue-ink: #abcbef;
+        --toast-bg: #e8eff3;
+        --toast-text: #0b1218;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
+        --focus: #7ddcbf;
+        --frame: #000000;
+        color-scheme: dark
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0b1218;
+      --surface: #141e27;
+      --surface-2: #1a2631;
+      --soft: #13261f;
+      --soft-border: #22423a;
+      --border: #263744;
+      --field-border: #6f8696;
+      --text: #e8eff3;
+      --text-2: #b2c1cb;
+      --text-3: #a9b9c4;
+      --accent: #5fd0ae;
+      --accent-hover: #7ddcbf;
+      --on-accent: #062018;
+      --accent-ink: #79dcbd;
+      --accent-soft: #183a31;
+      --header-bg: #08111a;
+      --header-text: #f2f7fa;
+      --header-sub: #b7c6cf;
+      --header-line: #4d6574;
+      --yellow-bg: #3a2e10;
+      --yellow-ink: #f2d38a;
+      --red-bg: #3e1c18;
+      --red-ink: #f7b4a8;
+      --blue-bg: #16283b;
+      --blue-ink: #abcbef;
+      --toast-bg: #e8eff3;
+      --toast-text: #0b1218;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
+      --focus: #7ddcbf;
+      --frame: #000000;
+      color-scheme: dark
     }
 
     * {
@@ -20,14 +126,17 @@
     }
 
     body {
-      margin: 0
+      margin: 0;
+      background: var(--bg);
+      color: var(--text)
     }
 
     button,
     input,
     textarea,
     select {
-      font: inherit
+      font: inherit;
+      color: inherit
     }
 
     button {
@@ -38,8 +147,21 @@
     input:focus-visible,
     select:focus-visible,
     textarea:focus-visible {
-      outline: 3px solid #47b89a;
-      outline-offset: 3px
+      outline: 3px solid var(--focus);
+      outline-offset: 2px
+    }
+
+    /* Line icons (inline SVG): they take the text colour. */
+    .ic {
+      width: 1.25em;
+      height: 1.25em;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: -0.25em
     }
 
     .app {
@@ -47,8 +169,8 @@
       margin: auto;
       display: grid;
       grid-template-columns: 1fr 430px;
-      gap: 50px;
-      padding: 45px 24px;
+      gap: 56px;
+      padding: 48px 24px;
       align-items: start
     }
 
@@ -58,71 +180,75 @@
 
     .eyebrow {
       font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 2px;
-      color: #18846e;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      color: var(--accent-ink);
       text-transform: uppercase
     }
 
     .intro h1 {
-      font-size: clamp(36px, 5vw, 64px);
-      line-height: 1.07;
-      letter-spacing: -2.5px;
-      color: #102b45;
+      font-size: clamp(34px, 4.6vw, 58px);
+      line-height: 1.08;
+      letter-spacing: -1.5px;
+      color: var(--text);
       margin: 18px 0
+    }
+
+    .intro h1 .accent {
+      color: var(--accent-ink)
     }
 
     .intro p {
       font-size: 18px;
       line-height: 1.65;
-      color: #4b6173;
+      color: var(--text-2);
       max-width: 530px
     }
 
     .features {
       display: grid;
       gap: 14px;
-      margin-top: 35px
+      margin-top: 32px
     }
 
     .feature {
       display: flex;
       gap: 14px;
       align-items: center;
-      color: #2d475b
+      color: var(--text)
     }
 
     .feature b {
       display: grid;
       place-items: center;
-      background: #d8eee7;
+      background: var(--accent-soft);
       border-radius: 12px;
-      width: 38px;
-      height: 38px;
-      color: #13735e
+      width: 40px;
+      height: 40px;
+      color: var(--accent-ink)
     }
 
     .note {
       margin-top: 40px;
       font-size: 13px;
-      color: #6c7f8c
+      color: var(--text-3)
     }
 
     .phone {
-      background: #f7faf9;
+      background: var(--bg);
       max-width: 430px;
       min-height: 760px;
-      border: 8px solid #10283f;
-      border-radius: 42px;
-      box-shadow: 0 24px 75px #173f5b30;
+      border: 8px solid var(--frame);
+      border-radius: 40px;
+      box-shadow: 0 24px 70px rgba(15, 35, 51, .22);
       overflow: hidden;
       position: relative
     }
 
     .top {
-      background: #0b263e;
-      color: white;
-      padding: 22px 22px 20px
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 20px 20px 18px
     }
 
     .topline {
@@ -133,116 +259,165 @@
     }
 
     .logo {
-      font-weight: 850;
-      letter-spacing: -.6px;
-      font-size: 21px
+      font-weight: 800;
+      letter-spacing: -.4px;
+      font-size: 20px
     }
 
     .logo span {
-      color: #4bd1a5
+      color: #7fe0c2
     }
 
     .tag {
       font-size: 10px;
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: .8px;
-      color: #a5e9d4
+      color: var(--header-sub)
     }
 
     .lang {
-      border: 1px solid #6a8b9d;
+      border: 1px solid var(--header-line);
       background: transparent;
-      color: white;
-      padding: 7px 10px;
-      border-radius: 9px;
+      color: var(--header-text);
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 12px;
       font-size: 12px;
-      font-weight: 750
+      font-weight: 700;
+      letter-spacing: .4px;
+      transition: background-color .15s
+    }
+
+    .lang:hover {
+      background: rgba(255, 255, 255, .08)
     }
 
     .top p {
-      color: #c0d5df;
-      font-size: 13px;
+      color: var(--header-sub);
+      font-size: 14px;
       margin: 6px 0 0
     }
 
+    /* Connection chip in the header (dot drawn here, not a text symbol). */
+    .conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 10px;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #e3f4ec;
+      color: #145643
+    }
+
+    .conn::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor
+    }
+
+    .conn.off {
+      background: #fff0cf;
+      color: #6a4507
+    }
+
+    .conn.off::before {
+      background: transparent;
+      box-shadow: inset 0 0 0 1.5px currentColor
+    }
+
     .screen {
-      padding: 22px 20px 100px;
+      padding: 22px 18px 104px;
       min-height: 570px
     }
 
     .card {
-      background: #fff;
-      border: 1px solid #e0e9e8;
-      border-radius: 18px;
-      padding: 19px;
-      box-shadow: 0 5px 18px #12374d09;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
       margin-bottom: 14px
     }
 
     .card.soft {
-      background: #e9f6f0;
-      border-color: #d5eae0
+      background: var(--soft);
+      border-color: var(--soft-border);
+      box-shadow: none
     }
 
     .small {
-      font-size: 12px;
-      color: #66808b
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-3)
     }
 
     .label {
-      font-size: 13px;
-      color: #466174;
-      font-weight: 750;
+      font-size: 14px;
+      color: var(--text-2);
+      font-weight: 650;
       display: block;
-      margin: 13px 0 7px
+      margin: 14px 0 7px
     }
 
     h2 {
-      font-size: 25px;
-      letter-spacing: -.8px;
-      line-height: 1.17;
+      font-size: 24px;
+      letter-spacing: -.5px;
+      line-height: 1.2;
       margin: 6px 0 10px;
-      color: #102d43
+      color: var(--text);
+      font-weight: 750
     }
 
     h3 {
-      font-size: 17px;
-      letter-spacing: -.3px;
+      font-size: 18px;
+      letter-spacing: -.2px;
+      line-height: 1.3;
       margin: 0 0 8px;
-      color: #18354b
+      color: var(--text);
+      font-weight: 700
     }
 
     p {
-      line-height: 1.5
+      line-height: 1.55
     }
 
     .muted {
-      color: #62798a;
-      font-size: 14px
+      color: var(--text-2);
+      font-size: 15px
     }
 
     .hero {
-      font-size: 13px;
-      font-weight: 800;
-      color: #1c806b;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-ink);
       text-transform: uppercase;
-      letter-spacing: 1px
+      letter-spacing: 1.2px
     }
 
     .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
       border: 0;
-      border-radius: 13px;
-      padding: 14px 16px;
-      background: #117d66;
-      color: #fff;
-      font-weight: 800;
+      border-radius: 14px;
+      padding: 13px 16px;
+      background: var(--accent);
+      color: var(--on-accent);
+      font-weight: 700;
       width: 100%;
-      min-height: 48px;
-      transition: transform .15s
+      min-height: 50px;
+      margin: 4px 0;
+      transition: background-color .15s, transform .15s
     }
 
     .btn:hover {
-      background: #0c6956
+      background: var(--accent-hover)
     }
 
     .btn:active {
@@ -250,24 +425,30 @@
     }
 
     .btn.secondary {
-      background: #e8f0f2;
-      color: #17364a
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--field-border)
     }
 
     .btn.outline {
-      background: #fff;
-      border: 1px solid #b8cdd1;
-      color: #204e60
+      background: var(--surface);
+      border: 1px solid var(--field-border);
+      color: var(--text)
+    }
+
+    .btn.secondary:hover,
+    .btn.outline:hover {
+      background: var(--accent-soft)
     }
 
     .btn.warn {
-      background: #fff1e9;
-      color: #9a4d21
+      background: var(--yellow-bg);
+      color: var(--yellow-ink)
     }
 
     .btnrow {
       display: flex;
-      gap: 9px
+      gap: 10px
     }
 
     .btnrow .btn {
@@ -279,85 +460,219 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       text-align: left;
-      background: white;
-      border: 1.5px solid #dbe5e6;
-      border-radius: 13px;
-      padding: 14px;
+      background: var(--surface);
+      border: 1.5px solid var(--field-border);
+      border-radius: 14px;
+      padding: 13px 14px;
       margin: 9px 0;
-      min-height: 53px;
-      color: #244253;
-      font-weight: 650
+      min-height: 52px;
+      color: var(--text);
+      font-weight: 600;
+      transition: background-color .15s, border-color .15s
     }
 
     .choice[aria-pressed=true] {
-      background: #e8f6f0;
-      border-color: #0e866a;
-      color: #0b654f
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-ink)
+    }
+
+    .choice input[type=checkbox] {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--accent);
+      flex: none
     }
 
     .check {
+      display: inline-flex;
+      color: var(--accent-ink)
+    }
+
+    .check .ic {
+      width: 22px;
+      height: 22px
+    }
+
+    .speakrow {
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .speakrow>.choice,
+    .speakrow>p,
+    .speakrow>h3 {
+      flex: 1
+    }
+
+    .batq {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.4
+    }
+
+    .speak {
+      flex: none;
+      width: 44px;
+      height: 44px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 12px;
+      border: 1px solid var(--field-border);
+      background: var(--surface);
+      color: var(--text-2);
+      transition: background-color .15s
+    }
+
+    .speak:hover {
+      background: var(--accent-soft)
+    }
+
+    .whosees {
+      margin: 6px 0 10px;
+      padding-left: 18px;
+      line-height: 1.55;
+      font-size: 15px;
+      color: var(--text-2)
+    }
+
+    .planitem+.planitem {
+      border-top: 1px solid var(--soft-border);
+      margin-top: 12px;
+      padding-top: 4px
+    }
+
+    .planwords {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
       font-size: 17px;
-      color: #128367
+      font-weight: 650;
+      color: var(--text);
+      margin: 8px 0
+    }
+
+    .batrow {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      margin: 10px 0
+    }
+
+    .batrow.missing {
+      border-color: var(--yellow-ink);
+      background: var(--yellow-bg)
+    }
+
+    .yn {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px
+    }
+
+    .ynbtn {
+      flex: 1;
+      min-height: 48px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 700;
+      transition: background-color .15s, border-color .15s
+    }
+
+    .ynbtn[aria-pressed=true] {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-ink)
+    }
+
+    .batrow .field {
+      margin-top: 10px
     }
 
     .field {
       width: 100%;
-      border: 1px solid #c8d8da;
-      background: white;
+      border: 1px solid var(--field-border);
+      background: var(--surface);
+      color: var(--text);
       border-radius: 12px;
-      padding: 13px;
-      color: #203f51;
+      padding: 12px 13px;
       min-height: 48px
     }
 
+    .field::placeholder {
+      color: var(--text-3);
+      opacity: 1
+    }
+
     .field:disabled {
-      background: #f1f4f4
+      background: var(--surface-2);
+      color: var(--text-2)
     }
 
     .progressbar {
       height: 6px;
-      background: #e0eae8;
+      background: var(--border);
       border-radius: 10px;
       overflow: hidden;
-      margin: 18px 0 20px
+      margin: 16px 0 20px
     }
 
     .progressbar div {
       height: 100%;
-      background: #1eab88;
-      transition: width .25s
+      background: var(--accent);
+      transition: width .2s
     }
 
     .step {
-      font-size: 12px;
-      font-weight: 800;
-      color: #207965
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-ink)
     }
 
     .pill {
       display: inline-block;
       border-radius: 30px;
-      background: #e2f3eb;
-      color: #176e58;
-      font-size: 12px;
-      font-weight: 750;
-      padding: 7px 11px
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      font-size: 13px;
+      font-weight: 650;
+      padding: 6px 11px
     }
 
     .pill.yellow {
-      background: #fff1d6;
-      color: #81550d
+      background: var(--yellow-bg);
+      color: var(--yellow-ink)
     }
 
     .pill.red {
-      background: #ffe8e4;
-      color: #9d3b2c
+      background: var(--red-bg);
+      color: var(--red-ink)
     }
 
     .pill.blue {
-      background: #e5effa;
-      color: #275b8b
+      background: var(--blue-bg);
+      color: var(--blue-ink)
+    }
+
+    .wk-green {
+      color: var(--accent-ink)
+    }
+
+    .wk-yellow {
+      color: var(--yellow-ink)
+    }
+
+    .wk-red {
+      color: var(--red-ink)
     }
 
     .tabs {
@@ -366,32 +681,39 @@
       left: 0;
       right: 0;
       display: flex;
-      background: white;
-      border-top: 1px solid #dbe7e8;
-      padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+      gap: 4px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 6px 8px max(10px, env(safe-area-inset-bottom));
       z-index: 3
     }
 
     .tab {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      min-height: 54px;
       border: 0;
       background: transparent;
-      color: #607784;
-      padding: 7px 0;
-      font-size: 11px;
-      font-weight: 800;
-      border-radius: 10px
+      color: var(--text-2);
+      padding: 6px 0;
+      font-size: 12px;
+      font-weight: 650;
+      border-radius: 12px;
+      transition: background-color .15s, color .15s
     }
 
-    .tab span {
-      display: block;
-      font-size: 21px;
-      margin-bottom: 3px
+    .tab .ic {
+      width: 22px;
+      height: 22px
     }
 
     .tab.active {
-      background: #e7f5ef;
-      color: #0d735d
+      background: var(--accent-soft);
+      color: var(--accent-ink)
     }
 
     .statrow {
@@ -401,103 +723,75 @@
     }
 
     .stat {
-      background: #fff;
-      border: 1px solid #e1eae8;
-      border-radius: 14px;
-      padding: 15px
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 15px;
+      box-shadow: var(--shadow)
     }
 
     .stat strong {
       display: block;
-      font-size: 27px;
-      color: #0d6d58
+      font-size: 28px;
+      letter-spacing: -.5px;
+      color: var(--accent-ink)
     }
 
     .stat span {
-      font-size: 12px;
-      color: #5a7480
-    }
-
-    .days {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 6px
-    }
-
-    .day {
-      aspect-ratio: 1;
-      border-radius: 9px;
-      background: #e8eff0;
-      display: grid;
-      place-items: center;
-      font-size: 11px;
-      font-weight: 750;
-      color: #56707d
-    }
-
-    .day.done {
-      background: #b9e8d6;
-      color: #155b4a
-    }
-
-    .day.miss {
-      background: #fce5d8;
-      color: #8c542f
-    }
-
-    .day.empty {
-      background: #edf2f3
+      font-size: 13px;
+      color: var(--text-2)
     }
 
     .banner {
-      background: #e7f3f8;
-      border-left: 4px solid #338ab0;
+      background: var(--blue-bg);
+      border-left: 4px solid var(--blue-ink);
       padding: 12px 14px;
-      border-radius: 8px;
-      font-size: 13px;
+      border-radius: 10px;
+      font-size: 14px;
       line-height: 1.5;
-      color: #30566b;
+      color: var(--blue-ink);
       margin: 14px 0
     }
 
     .bubble {
       max-width: 92%;
-      background: #dff1e8;
-      border-radius: 16px 16px 4px 16px;
-      padding: 15px;
-      color: #194d3c;
-      font-size: 14px;
+      background: var(--accent-soft);
+      border-radius: 18px 18px 4px 18px;
+      padding: 14px;
+      color: var(--text);
+      font-size: 15px;
       line-height: 1.5;
       margin: 12px 0 12px auto
     }
 
     .sms {
-      background: #e7eaf0;
-      border-radius: 16px 16px 16px 4px;
-      padding: 15px;
-      font-size: 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 18px 18px 18px 4px;
+      padding: 14px;
+      font-size: 15px;
       line-height: 1.55;
-      color: #30465a;
-      margin: 16px 0
+      color: var(--text);
+      margin: 14px 0
     }
 
     .score {
-      font-size: 45px;
-      font-weight: 850;
-      color: #117d66;
-      letter-spacing: -2px
+      font-size: 44px;
+      font-weight: 800;
+      color: var(--accent-ink);
+      letter-spacing: -1.5px
     }
 
     .bar {
       height: 9px;
-      background: #e9efef;
+      background: var(--border);
       border-radius: 10px;
       overflow: hidden
     }
 
     .bar div {
       height: 100%;
-      background: #26a887
+      background: var(--accent)
     }
 
     .metric {
@@ -507,28 +801,28 @@
     .metricline {
       display: flex;
       justify-content: space-between;
-      font-size: 13px;
+      font-size: 14px;
       margin-bottom: 6px
     }
 
     .divider {
       height: 1px;
-      background: #e2eaea;
+      background: var(--border);
       margin: 18px 0
     }
 
     .toast {
-      background: #173f50;
-      color: white;
-      padding: 11px 14px;
-      border-radius: 12px;
-      font-size: 13px;
+      background: var(--toast-bg);
+      color: var(--toast-text);
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 14px;
       margin-bottom: 12px
     }
 
     .foot {
-      font-size: 11px;
-      color: #748b94;
+      font-size: 12px;
+      color: var(--text-3);
       text-align: center;
       padding: 12px 0 0
     }
@@ -543,23 +837,36 @@
     }
 
     .switch .btn {
-      font-size: 12px;
+      font-size: 13px;
       padding: 10px
     }
 
     .iconbubble {
-      width: 46px;
-      height: 46px;
+      width: 44px;
+      height: 44px;
       border-radius: 14px;
-      background: #dff3e9;
+      background: var(--accent-soft);
+      color: var(--accent-ink);
       display: grid;
       place-items: center;
-      font-size: 25px;
-      margin-bottom: 14px
+      margin-bottom: 12px
+    }
+
+    .iconbubble .ic {
+      width: 24px;
+      height: 24px
     }
 
     .hidden {
       display: none !important
+    }
+
+    /* "Larger text" (patient setting): everything in the patient view is drawn bigger. zoom reflows the
+       content to the screen width, so it still fits a 380px phone with no sideways scrolling. */
+    .phone.large .top,
+    .phone.large .screen,
+    .phone.large .tabs {
+      zoom: 1.2
     }
 
     @media(max-width:850px) {
@@ -585,10 +892,11 @@
       }
 
       .top {
-        padding-top: max(22px, env(safe-area-inset-top))
+        padding-top: max(20px, env(safe-area-inset-top))
       }
     }
 
+    /* Short, gentle movement only; none at all when the phone asks for reduced motion. */
     @media(prefers-reduced-motion:reduce) {
 
       *,
@@ -609,35 +917,35 @@
     </div>
     <h1>
      Support that fits
-     <span style="color:#168c70">
+     <span class="accent">
       your life.
      </span>
     </h1>
     <p>
-     DEAP Connect is a mobile-first patient and caregiver experience built around the existing KTx-CONNECT care journey. Explore a real, interactive prototype with supportive check-ins, personalized message previews, and progress you can see.
+     KTx-CONNECT is a mobile-first patient and caregiver experience for the transplant care journey. Explore a real, interactive prototype with supportive check-ins, personalized message previews, and progress you can see.
     </p>
     <div class="features">
      <div class="feature">
       <b>
-       ✓
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.2 4.2L19 7"/></svg>
       </b>
       Patient-led barrier assessment
      </div>
      <div class="feature">
       <b>
-       ◷
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
       </b>
       Reminders that fit changing schedules
      </div>
      <div class="feature">
       <b>
-       ♡
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
       </b>
       Kind support without blame
      </div>
      <div class="feature">
       <b>
-       ↗
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8"/></svg>
       </b>
       Progress, preferences, and caregiver access
      </div>
@@ -646,18 +954,11 @@
      All information is fictional. No real messages are sent. Clinical content is a placeholder pending team review.
     </p>
    </section>
-   <section aria-label="DEAP mobile application" class="phone">
+   <section aria-label="KTx-CONNECT mobile application" class="phone">
     <header class="top">
      <div class="topline">
       <div class="logo">
-       KTx
-       <span>
-        •
-       </span>
-       CONNECT
-       <span style="font-size:11px;letter-spacing:1px">
-        / DEAP
-       </span>
+       KTx<span>-</span>CONNECT
       </div>
       <button aria-label="Change language" class="lang" id="lang">
        ESPAÑOL
@@ -675,12 +976,76 @@
   </main>
   <script>
     'use strict';
-    const KEY = 'deap_patient_caregiver_v5';
-    const barrierKeys = ['forget', 'taste', 'swallow', 'side', 'activities', 'schedule', 'other'];
-    const strategyKeys = ['reminder', 'routine', 'cue', 'trusted'];
+    // A personal link (patient.html?invite=TOKEN) is one person. Their data is kept under its own
+    // storage key, so two links in the same browser are two different people.
+    const INVITE = ((new URLSearchParams(location.search).get('invite') || '').match(/^[A-Za-z0-9_-]{8,64}$/) || [])[0] ||
+      null;
+    const KEY = 'deap_patient_caregiver_v5' + (INVITE ? ':' + INVITE : '');
+    // Who this link belongs to (from the server): person, names, age, language, who leads.
+    // Was anything saved in this browser for this link before the page opened?
+    const deapHadLocal = (() => {
+      try {
+        return !!localStorage.getItem(KEY)
+      } catch (e) {
+        return false
+      }
+    })();
+    let deapInvite = null,
+      // The patient-record part of what the server sent for this link (already filtered).
+      deapView = null;
+    // Barriers Assessment Tool (BAT), 14 items in packet order, then "Something else".
+    const batKeys = ['forget', 'taste', 'swallow', 'side', 'embarrass', 'noneed', 'toomany', 'notwork',
+      'confusing', 'ranout', 'afford', 'activities', 'refuse', 'inconvenient'
+    ];
+    const barrierKeys = [...batKeys, 'other'];
+    // "What might help", by biggest barrier (packet page 5 action plans only).
+    // Barriers with a self-help list: the patient chooses ideas.
+    const strategyOptions = {
+      forget: ['reminder', 'routine', 'cue', 'trusted'],
+      taste: ['taste_flavoring', 'taste_coating', 'taste_popsicle', 'taste_food'],
+      swallow: ['swallow_candy', 'swallow_head', 'swallow_coating'],
+      embarrass: ['embarrass_discreet', 'embarrass_script']
+    };
+    // Barriers without a self-help list: show a message instead of choices.
+    const strategyMessage = {
+      side: 'msgSide',
+      noneed: 'msgNoneed',
+      toomany: 'msgPrescriber',
+      notwork: 'msgPrescriber',
+      confusing: 'msgPrescriber',
+      ranout: 'msgSocial',
+      afford: 'msgSocial',
+      activities: 'msgReachOut',
+      refuse: 'msgReachOut',
+      inconvenient: 'msgReachOut',
+      // "Something else" has no packet action plan; the team set this message.
+      other: 'msgOther'
+    };
+    const ideasFor = b => strategyOptions[b] || [];
+    // Simple line icons drawn as inline SVG (no emoji, no icon library, no network).
+    const ICONS = {
+      check: '<path d="M5 12.5l4.2 4.2L19 7"/>',
+      checkCircle: '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16 9.6"/>',
+      circle: '<circle cx="12" cy="12" r="9"/>',
+      home: '<path d="M4 10.5L12 4l8 6.5"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+      heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+      chart: '<path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/>',
+      gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
+      mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5l7.5 5.5 7.5-5.5"/>',
+      refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.5H15"/>',
+      speaker: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/>',
+      phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>'
+    };
+    const ic = name => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
     const T = {
       en: {
         subtitle: 'Your care, your pace.',
+        // Small headings above screens.
+        eb_checkin: 'CHECK-IN',
+        eb_journey: 'YOUR JOURNEY',
+        eb_space: 'YOUR SPACE',
+        eb_support: 'SUPPORT',
+        eb_thanks: 'THANK YOU',
         patientNameLabel: 'Patient first name',
         caregiverNameLabel: 'Caregiver first name',
         nameRequired: 'Please enter the patient name.',
@@ -699,24 +1064,51 @@
         caregiver: 'I am answering for my child',
         careNote: 'You can share what you notice. Your child should have a voice in their care plan, too.',
         barrierTitle: 'What makes medicine hard?',
-        barrierDesc: 'Pick any that feel true for you. It is okay to pick more than one.',
-        forget: 'I forget',
-        taste: 'I do not like the taste',
-        swallow: 'The pills are hard to swallow',
-        side: 'I do not like the side effects',
-        activities: 'Other activities get in the way',
-        schedule: 'My schedule changes a lot',
+        barrierDesc: 'For each one, tap Yes if it is true for you, or No if it is not.',
+        yes: 'Yes',
+        no: 'No',
+        answerAll: 'Please answer Yes or No for each one.',
+        batKind: 'There are no wrong answers. Lots of people find parts of this hard. Your answers help your team help you, and nobody will be in trouble.',
+        batKindCg: 'There are no wrong answers. Lots of families find parts of this hard. Your answers help your team help your child, and nobody will be in trouble.',
+        forget: 'Forgetting to take them or bring them with you',
+        taste: 'Hate the taste',
+        swallow: 'Hard to swallow pills',
+        side: 'Side effects (e.g., nausea, constipation)',
+        embarrass: "I don't want others to know I take medicine",
+        noneed: "I don't need the medicine",
+        toomany: 'Too many medicines or too many times a day',
+        notwork: 'The medicine does not work',
+        confusing: 'Difficult to understand medication instructions',
+        ranout: 'Ran out of medicine',
+        afford: "Can't afford the medicine",
+        activities: 'Gets in the way of other activities',
+        refuse: 'Refuse to take them',
+        inconvenient: 'Inconvenient',
         other: 'Something else',
         otherPlaceholder: 'Tell us in your own words (optional)',
-        placeholder: 'Placeholder for the validated MAPS barrier list. The clinical team will provide the full list.',
         primaryTitle: 'Which is the biggest problem right now?',
         primaryDesc: 'Pick one. You know your day best.',
         strategyTitle: 'What might help?',
         strategyDesc: 'Choose ideas that sound doable. Your care team will make a plan with you.',
-        reminder: 'Set a reminder at a time I choose',
-        routine: 'Link medicine to something I already do',
-        cue: 'Keep a visible reminder where I will see it',
-        trusted: 'Ask someone I trust to remind me',
+        reminder: 'Phone or app reminders',
+        routine: 'Pair doses with a daily routine, like brushing teeth',
+        cue: "Keep a visible cue where you'll see it",
+        trusted: 'Ask someone you trust to help remind you',
+        taste_flavoring: 'Ask the pharmacist about flavoring',
+        taste_coating: 'Ask about coatings or syrups',
+        taste_popsicle: 'Numb your taste buds with a popsicle first',
+        taste_food: 'Mix with food — only if your team says it is OK',
+        swallow_candy: 'Practice swallowing with small candy',
+        swallow_head: 'Try changing your head position',
+        swallow_coating: 'Ask about coating the pill',
+        embarrass_discreet: 'Carry and take your medicine discreetly',
+        embarrass_script: 'Get a short script for explaining it to friends',
+        msgSide: 'Your care team will talk with you about your medicines. Do not change or stop any medicine on your own.',
+        msgNoneed: 'Your transplant coordinator will talk with you about why this medicine matters.',
+        msgPrescriber: 'Your doctor, nurse practitioner, or pharmacist will talk with you about this.',
+        msgSocial: 'A social worker from your team will reach out to help.',
+        msgReachOut: 'Someone from your care team will reach out to talk with you. You are not in trouble.',
+        msgOther: 'Thanks for telling us in your own words. Your transplant coordinator will read it and talk with you.',
         personalize: 'Make this fit your day',
         personalizeDesc: 'Choose when and how you would like to hear from us.',
         time: 'Best time',
@@ -738,10 +1130,21 @@
         hello: 'You are doing your best',
         helloCare: 'You are supporting your child',
         todaySub: 'Small steps matter. You can check in here.',
-        plan: 'My agreed plan',
-        planDefault: 'Talk with your care team to make a plan that fits your day.',
+        plan: 'My plan',
+        planFor: 'For',
+        planDefault: 'Your care team will make a plan with you.',
+        checkTitle: 'Is your plan working?',
+        check_working: "Yes, it's working",
+        check_not_really: 'Not really',
+        check_change: 'I want to change it',
+        checkSend: 'Send my answer',
+        checkThanks: 'Thanks for telling us. Your care team will see your answer.',
+        workingMsg: 'Your care team says your plan is working. That takes real effort. Keep going at your own pace.',
         took: 'I took my medicine',
         missed: 'I missed a dose',
+        cgTook: '{pt} took the medicine',
+        cgMissed: '{pt} missed a dose',
+        cgPlan: "{pt}'s plan",
         done: 'Thanks for checking in',
         doneSub: 'Your check-in has been saved on this device.',
         missTitle: 'Missed a dose?',
@@ -762,17 +1165,16 @@
         swap: 'You can ask your team whether another strategy would fit better.',
         progressTitle: 'Your progress',
         progressDesc: 'These numbers show your check-ins in this demo, not a medical score.',
-        days: 'Days checked in',
+        daysCheckedIn: 'Days you checked in',
+        checkinsEmpty: 'Your check-ins will show up here.',
+        missedOk: "Missed a day? That's okay. Tell us what got in the way.",
         last30: 'In the last 30 days',
         weekResult: 'Latest weekly answer',
         noWeekly: 'No weekly check-in yet',
         barrierFocus: 'Your main challenge',
         strategies: 'Ideas you chose',
-        silence: 'Try the re-engagement demo',
-        simulate: 'Simulate 2 days without a reply',
         nudge: 'Gentle follow-up',
         nudgeText: 'We have not heard from you in a bit. Is there a better time to check in? You can change your preferences anytime.',
-        resetSilence: 'Clear simulated silence',
         settingsTitle: 'Your preferences',
         save: 'Save preferences',
         saved: 'Preferences saved',
@@ -783,20 +1185,94 @@
         smsButton: 'Open secure demo link',
         privacy: 'Demo only. No account, real SMS, or medical records.',
         footer: 'Pre-pilot prototype with sample data. Not for clinical use.',
-        choose: 'Please select at least one option.',
         chooseOne: 'Please choose one option.',
         requestSaved: 'Care-team contact request saved in demo.',
         shiftLabel: 'Use a flexible time',
-        reminderMsg: 'Hi! A gentle reminder to follow the medicine plan you made with your care team.',
+        reminderMsg: 'A gentle reminder to follow the medicine plan you made with your care team.',
         reminderShort: 'Time to check your medicine plan.',
         reminderEnc: 'You have got this. Check your medicine plan when it fits your day.',
+        // Discreet mode: neutral wording for anything a friend might see (no transplant/medicine/pills/dose).
+        discreetLabel: 'Discreet mode (neutral words in texts and previews)',
+        d_appName: 'Check-in',
+        d_smsTitle: 'New message',
+        d_smsText: 'your check-in is ready (1 min).',
+        d_smsButton: 'Open check-in',
+        d_remFriendly: 'quick check-in time.',
+        d_remShort: 'check-in time.',
+        d_remEnc: "you've got this. Quick check-in time.",
+        ws_discreetOn: 'Discreet mode is on: texts and previews use neutral words, with no mention of transplant or medicine.',
+        ws_discreetOff: 'Discreet mode is off: texts and previews may mention your medicine.',
+        readAloud: 'Read aloud',
+        recheckTitle: 'Time for your 6-month check-in',
+        recheckDesc: 'Please answer the 14 questions again. Your earlier answers are kept.',
+        recheckBtn: 'Retake my checklist',
+        retakeChanged: 'Something changed? Retake my checklist',
+        textLabel: 'Check in by text reply (no data needed)',
+        largeText: 'Larger text',
+        theme: 'Appearance',
+        theme_system: 'Same as my phone',
+        theme_light: 'Light',
+        theme_dark: 'Dark',
+        txt_sim: 'Simulated text message — no real SMS sent',
+        txt_prompt: 'how was your week? Reply 1 = going well, 2 = some bumps, 3 = hard week',
+        txt_promptPlan: 'how was your week with your medicine plan? Reply 1 = going well, 2 = some bumps, 3 = hard week',
+        txt_typePh: 'Type a reply',
+        txt_send: 'Send',
         todayLogged: 'Checked in today',
         noData: 'Not yet',
         openWeekly: 'Do weekly check-in',
-        edit: 'Edit preferences'
+        edit: 'Edit preferences',
+        youAre: 'You are',
+        ws_title: 'Who sees what',
+        ws_team: 'Your care team sees everything you share here.',
+        ws_ptCgNot: '{cg} does not see your checklist answers, your own words, or your check-back notes.',
+        ws_ptNever: "You never see {cg}'s checklist answers.",
+        ws_sharePlans: 'Share my plans with {cg}',
+        ws_shareWeekly: 'Share my weekly check-in with {cg}',
+        ws_cgSees: 'You see:',
+        ws_cgDates: 'upcoming check-back dates',
+        ws_cgPlans: "{pt}'s plans (shared by {pt})",
+        ws_cgWeekly: "{pt}'s weekly check-in (shared by {pt})",
+        ws_cgNot: "You do not see {pt}'s checklist answers, own words, or check-back notes.",
+        ws_cgPtNot: '{pt} does not see your checklist answers.',
+        ws_under10: 'You are the main user for {pt}. You see everything about {pt} here.',
+        ws_proposed: 'Proposed rules for this demo. Your care team decides the real rules.',
+        ws_remindYou: 'Reminders and “Is your plan working?” questions come to you.',
+        ws_remindOther: 'Right now, reminders and “Is your plan working?” questions go to {other}.',
+        theirPlans: "{pt}'s plans",
+        plansPrivate: "{pt}'s plans are private.",
+        noPlanYet: 'The care team will make a plan with {pt}.',
+        upcomingChecks: 'Upcoming check-backs',
+        planOne: 'plan',
+        planMany: 'plans',
+        theirWeekly: "{pt}'s latest weekly check-in",
+        cgOwnPlans: 'Plans for you',
+        cgOwnDesc: 'For things only you told us about. {pt} does not see these plans.',
+        nextCheck: 'Next check-back',
+        ws_cgOwn: 'Plans for things only you reported are shown to you, not to {pt}.',
+        ws_teen: 'You decide what {cg} sees. Sharing starts off, and you can change it any time.',
+        ws_adult: 'You are 18 or over: nothing is shared with {cg} unless you give permission below. You can take it back at any time, and it stops at once.',
+        ws_cgAdult: '{pt} is 18 or over. You only see what {pt} gives permission to share.',
+        ws_cgAdultNone: 'Right now {pt} has not given permission to share anything with you.',
+        permitPlans: 'I give permission for my care team to share my plans with {cg}',
+        permitWeekly: 'I give permission for my care team to share my weekly check-in with {cg}',
+        permitGiven: 'Permission given on {date}',
+        shareTitle: 'Sharing with {cg}',
+        shareQPlans: 'Do you want your care team to share your plans with {cg}?',
+        shareQWeekly: 'Do you want your care team to share your weekly check-in with {cg}?',
+        shareLater: 'You can change this any time in Settings.',
+        shareBoth: 'Please answer both questions.',
+        badLink: 'This link is not valid. Please ask your care team for a new one.',
+        emergency: 'If someone is unconscious or unresponsive, call 911.'
       },
       es: {
         subtitle: 'Tu cuidado, a tu ritmo.',
+        // Small headings above screens: draft translation for the clinical team to review.
+        eb_checkin: 'REGISTRO',
+        eb_journey: 'TU CAMINO',
+        eb_space: 'TU ESPACIO',
+        eb_support: 'APOYO',
+        eb_thanks: 'GRACIAS',
         patientNameLabel: 'Nombre del paciente',
         caregiverNameLabel: 'Nombre del cuidador',
         nameRequired: 'Escribe el nombre del paciente.',
@@ -815,24 +1291,52 @@
         caregiver: 'Respondo por mi hijo o hija',
         careNote: 'Puedes compartir lo que notas. Tu hijo o hija también debe participar en su plan.',
         barrierTitle: '¿Qué hace difícil tomar tu medicina?',
-        barrierDesc: 'Elige todas las opciones que te pasen. Puedes elegir varias.',
-        forget: 'Se me olvida',
-        taste: 'No me gusta el sabor',
+        barrierDesc: 'En cada una, toca Sí si te pasa, o No si no te pasa.',
+        yes: 'Sí',
+        no: 'No',
+        answerAll: 'Responde Sí o No en cada una.',
+        // Kind note before the checklist: draft translation for the clinical team to review.
+        batKind: 'No hay respuestas incorrectas. A mucha gente se le hacen difíciles algunas de estas cosas. Tus respuestas ayudan a tu equipo a ayudarte, y nadie se va a meter en problemas.',
+        batKindCg: 'No hay respuestas incorrectas. A muchas familias se les hacen difíciles algunas de estas cosas. Tus respuestas ayudan a tu equipo a ayudar a tu hijo o hija, y nadie se va a meter en problemas.',
+        forget: 'Se me olvida tomarlas o llevarlas conmigo',
+        taste: 'Odio el sabor',
         swallow: 'Me cuesta tragar las pastillas',
-        side: 'No me gustan los efectos secundarios',
-        activities: 'Otras actividades se interponen',
-        schedule: 'Mi horario cambia mucho',
+        side: 'Efectos secundarios (por ejemplo, náuseas o estreñimiento)',
+        embarrass: 'No quiero que otros sepan que tomo medicina',
+        noneed: 'No necesito la medicina',
+        toomany: 'Son muchas medicinas o muchas veces al día',
+        notwork: 'La medicina no funciona',
+        confusing: 'Es difícil entender las instrucciones de la medicina',
+        ranout: 'Se me acabó la medicina',
+        afford: 'No puedo pagar la medicina',
+        activities: 'No me deja hacer otras actividades',
+        refuse: 'Me niego a tomarlas',
+        inconvenient: 'Es poco práctico',
         other: 'Otra cosa',
         otherPlaceholder: 'Cuéntanos con tus palabras (opcional)',
-        placeholder: 'Lista provisional. El equipo clínico dará la lista MAPS validada.',
         primaryTitle: '¿Cuál es el mayor problema ahora?',
         primaryDesc: 'Elige uno. Tú conoces mejor tu día.',
         strategyTitle: '¿Qué podría ayudarte?',
         strategyDesc: 'Elige ideas que puedas hacer. Tu equipo hará un plan contigo.',
-        reminder: 'Poner un recordatorio a la hora que elija',
-        routine: 'Unir la medicina a algo que ya hago',
-        cue: 'Dejar una señal visible donde pueda verla',
-        trusted: 'Pedir a alguien de confianza que me recuerde',
+        reminder: 'Recordatorios en el teléfono o en una app',
+        routine: 'Tomar las dosis junto con algo que haces cada día, como cepillarte los dientes',
+        cue: 'Dejar una señal visible donde la veas',
+        trusted: 'Pedir a alguien de confianza que te ayude a recordar',
+        taste_flavoring: 'Preguntar al farmacéutico si le pueden dar sabor',
+        taste_coating: 'Preguntar por cubiertas o jarabes',
+        taste_popsicle: 'Adormecer tu lengua con una paleta de hielo antes',
+        taste_food: 'Mezclarla con comida — solo si tu equipo dice que está bien',
+        swallow_candy: 'Practicar a tragar con dulces pequeños',
+        swallow_head: 'Probar otra posición de la cabeza',
+        swallow_coating: 'Preguntar si se puede cubrir la pastilla',
+        embarrass_discreet: 'Llevar y tomar tu medicina sin que otros lo noten',
+        embarrass_script: 'Tener unas palabras cortas para explicarlo a tus amigos',
+        msgSide: 'Tu equipo de cuidado hablará contigo sobre tus medicinas. No cambies ni dejes ninguna medicina por tu cuenta.',
+        msgNoneed: 'Tu coordinador de trasplante hablará contigo sobre por qué esta medicina es importante.',
+        msgPrescriber: 'Tu médico, enfermera practicante o farmacéutico hablará contigo sobre esto.',
+        msgSocial: 'Un trabajador social de tu equipo se comunicará contigo para ayudarte.',
+        msgReachOut: 'Alguien de tu equipo de cuidado se comunicará contigo para hablar. No estás en problemas.',
+        msgOther: 'Gracias por contarnos con tus propias palabras. Tu coordinador de trasplante lo leerá y hablará contigo.',
         personalize: 'Adapta esto a tu día',
         personalizeDesc: 'Elige cuándo y cómo quieres recibir mensajes.',
         time: 'Mejor hora',
@@ -854,13 +1358,25 @@
         hello: 'Estás haciendo lo mejor que puedes',
         helloCare: 'Estás apoyando a tu hijo o hija',
         todaySub: 'Los pequeños pasos cuentan. Puedes responder aquí.',
-        plan: 'Mi plan acordado',
-        planDefault: 'Habla con tu equipo para crear un plan que funcione para ti.',
+        plan: 'Mi plan',
+        planFor: 'Para',
+        planDefault: 'Tu equipo de cuidado hará un plan contigo.',
+        checkTitle: '¿Te está funcionando tu plan?',
+        check_working: 'Sí, me está funcionando',
+        check_not_really: 'No mucho',
+        check_change: 'Quiero cambiarlo',
+        checkSend: 'Enviar mi respuesta',
+        checkThanks: 'Gracias por contarnos. Tu equipo de cuidado verá tu respuesta.',
+        // Draft translation for the clinical team to review.
+        workingMsg: 'Tu equipo de cuidado dice que tu plan está funcionando. Eso requiere mucho esfuerzo. Sigue a tu propio ritmo.',
         took: 'Tomé mi medicina',
-        missed: 'Olvidé una dosis',
+        missed: 'No tomé una dosis',
+        cgTook: '{pt} tomó su medicina',
+        cgMissed: '{pt} no tomó una dosis',
+        cgPlan: 'Plan de {pt}',
         done: 'Gracias por responder',
         doneSub: 'Tu respuesta se guardó en este dispositivo.',
-        missTitle: '¿Olvidaste una dosis?',
+        missTitle: '¿No tomaste una dosis?',
         missText: 'Puede pasar. No adivines qué hacer. Habla con tu equipo de trasplante para recibir instrucciones sobre tu medicina.',
         contact: 'Pedir un mensaje a mi equipo',
         contactDone: 'Tu solicitud se guardó en esta demostración. No se envió ningún mensaje real.',
@@ -878,17 +1394,17 @@
         swap: 'Puedes preguntar si otra estrategia te ayudaría más.',
         progressTitle: 'Tu progreso',
         progressDesc: 'Estos números muestran respuestas de esta demostración, no una nota médica.',
-        days: 'Días registrados',
+        // Progress text: draft translation for the clinical team to review.
+        daysCheckedIn: 'Días que respondiste',
+        checkinsEmpty: 'Aquí aparecerán tus respuestas.',
+        missedOk: '¿Se te pasó un día? Está bien. Cuéntanos qué te lo impidió.',
         last30: 'En los últimos 30 días',
         weekResult: 'Última respuesta semanal',
         noWeekly: 'Aún no hay respuesta semanal',
         barrierFocus: 'Tu mayor dificultad',
         strategies: 'Ideas que elegiste',
-        silence: 'Prueba la demostración de seguimiento',
-        simulate: 'Simular 2 días sin responder',
         nudge: 'Mensaje amable de seguimiento',
         nudgeText: 'Hace un tiempo que no sabemos de ti. ¿Hay un mejor momento para hablar? Puedes cambiar tus preferencias.',
-        resetSilence: 'Borrar simulación',
         settingsTitle: 'Tus preferencias',
         save: 'Guardar preferencias',
         saved: 'Preferencias guardadas',
@@ -899,17 +1415,86 @@
         smsButton: 'Abrir enlace de demostración',
         privacy: 'Solo demostración. Sin cuenta, SMS reales ni datos médicos.',
         footer: 'Prototipo previo al piloto con datos de ejemplo. No es para uso clínico.',
-        choose: 'Elige al menos una opción.',
         chooseOne: 'Elige una opción.',
         requestSaved: 'Solicitud guardada en la demostración.',
         shiftLabel: 'Usar un horario flexible',
-        reminderMsg: '¡Hola! Un recordatorio amable para seguir el plan de medicina que hiciste con tu equipo.',
+        reminderMsg: 'Un recordatorio amable para seguir el plan de medicina que hiciste con tu equipo.',
         reminderShort: 'Es hora de revisar tu plan de medicina.',
         reminderEnc: 'Tú puedes. Revisa tu plan de medicina cuando sea buen momento.',
+        discreetLabel: 'Modo discreto (palabras neutras en mensajes y vistas previas)',
+        d_appName: 'Registro',
+        d_smsTitle: 'Nuevo mensaje',
+        d_smsText: 'tu registro está listo (1 min).',
+        d_smsButton: 'Abrir registro',
+        d_remFriendly: 'es hora de un registro rápido.',
+        d_remShort: 'hora del registro.',
+        d_remEnc: 'tú puedes. Es hora de un registro rápido.',
+        ws_discreetOn: 'El modo discreto está activado: los mensajes y vistas previas usan palabras neutras, sin mencionar el trasplante ni la medicina.',
+        ws_discreetOff: 'El modo discreto está desactivado: los mensajes y vistas previas pueden mencionar tu medicina.',
+        readAloud: 'Leer en voz alta',
+        recheckTitle: 'Es hora de tu registro de 6 meses',
+        recheckDesc: 'Responde otra vez las 14 preguntas. Tus respuestas anteriores se guardan.',
+        recheckBtn: 'Volver a hacer mi lista',
+        retakeChanged: '¿Algo cambió? Volver a hacer mi lista',
+        textLabel: 'Responder por mensaje de texto (sin datos)',
+        // Draft translation for the clinical team to review.
+        largeText: 'Letra más grande',
+        theme: 'Apariencia',
+        theme_system: 'Igual que mi teléfono',
+        theme_light: 'Clara',
+        theme_dark: 'Oscura',
+        txt_sim: 'Mensaje de texto simulado — no se envía ningún SMS real',
+        txt_prompt: '¿cómo te fue esta semana? Responde 1 = bien, 2 = algunos problemas, 3 = semana difícil',
+        txt_promptPlan: '¿cómo te fue esta semana con tu plan de medicina? Responde 1 = bien, 2 = algunos problemas, 3 = semana difícil',
+        txt_typePh: 'Escribe una respuesta',
+        txt_send: 'Enviar',
         todayLogged: 'Ya respondiste hoy',
         noData: 'Todavía no',
         openWeekly: 'Responder por la semana',
-        edit: 'Cambiar preferencias'
+        edit: 'Cambiar preferencias',
+        youAre: 'Eres',
+        ws_title: 'Quién ve qué',
+        ws_team: 'Tu equipo de cuidado ve todo lo que compartes aquí.',
+        ws_ptCgNot: '{cg} no ve tus respuestas de la lista, tus propias palabras ni tus notas de seguimiento.',
+        ws_ptNever: 'Tú nunca ves las respuestas de la lista de {cg}.',
+        ws_sharePlans: 'Compartir mis planes con {cg}',
+        ws_shareWeekly: 'Compartir mi respuesta semanal con {cg}',
+        ws_cgSees: 'Tú ves:',
+        ws_cgDates: 'las próximas fechas de seguimiento',
+        ws_cgPlans: 'los planes de {pt} (si {pt} los comparte)',
+        ws_cgWeekly: 'la respuesta semanal de {pt} (si {pt} la comparte)',
+        ws_cgNot: 'No ves las respuestas de la lista de {pt}, sus propias palabras ni sus notas de seguimiento.',
+        ws_cgPtNot: '{pt} no ve tus respuestas de la lista.',
+        ws_under10: 'Eres quien usa la app por {pt}. Aquí ves todo sobre {pt}.',
+        ws_proposed: 'Reglas propuestas para esta demostración. Tu equipo de cuidado decide las reglas reales.',
+        ws_remindYou: 'Los recordatorios y la pregunta “¿Te está funcionando tu plan?” te llegan a ti.',
+        ws_remindOther: 'Por ahora, los recordatorios y la pregunta “¿Te está funcionando tu plan?” le llegan a {other}.',
+        theirPlans: 'Planes de {pt}',
+        plansPrivate: 'Los planes de {pt} son privados.',
+        noPlanYet: 'El equipo de cuidado hará un plan con {pt}.',
+        upcomingChecks: 'Próximos seguimientos',
+        planOne: 'plan',
+        planMany: 'planes',
+        theirWeekly: 'Última respuesta semanal de {pt}',
+        cgOwnPlans: 'Planes para ti',
+        cgOwnDesc: 'Para cosas que solo tú nos contaste. {pt} no ve estos planes.',
+        nextCheck: 'Próximo seguimiento',
+        ws_cgOwn: 'Los planes para cosas que solo tú reportaste se te muestran a ti, no a {pt}.',
+        // Sharing by age: draft translation for the clinical team to review.
+        ws_teen: 'Tú decides qué ve {cg}. Al principio no se comparte nada, y puedes cambiarlo cuando quieras.',
+        ws_adult: 'Tienes 18 años o más: no se comparte nada con {cg} a menos que des permiso abajo. Puedes quitarlo cuando quieras y deja de compartirse al instante.',
+        ws_cgAdult: '{pt} tiene 18 años o más. Solo ves lo que {pt} da permiso para compartir.',
+        ws_cgAdultNone: 'Por ahora {pt} no ha dado permiso para compartir nada contigo.',
+        permitPlans: 'Doy permiso a mi equipo de cuidado para compartir mis planes con {cg}',
+        permitWeekly: 'Doy permiso a mi equipo de cuidado para compartir mi respuesta semanal con {cg}',
+        permitGiven: 'Permiso dado el {date}',
+        shareTitle: 'Compartir con {cg}',
+        shareQPlans: '¿Quieres que tu equipo de cuidado comparta tus planes con {cg}?',
+        shareQWeekly: '¿Quieres que tu equipo de cuidado comparta tu respuesta semanal con {cg}?',
+        shareLater: 'Puedes cambiar esto cuando quieras en Ajustes.',
+        shareBoth: 'Responde las dos preguntas.',
+        badLink: 'Este enlace no es válido. Pide uno nuevo a tu equipo de cuidado.',
+        emergency: 'Si alguien está inconsciente o no responde, llama al 911.'
       }
     };
     const fresh = () => ({
@@ -920,6 +1505,8 @@
       patientName: '',
       caregiverName: '',
       barriers: [],
+      batAnswers: {},
+      batId: '',
       other: '',
       primary: '',
       strategies: [],
@@ -932,6 +1519,8 @@
       daily: [],
       weekly: [],
       contactRequests: 0,
+      // Patient's answers to "Is your plan working?", keyed by task id.
+      checkbacks: {},
       silence: false
     });
     let s;
@@ -940,7 +1529,27 @@
     } catch (e) {
       s = fresh()
     };
+    // Older saves may hold barrier codes that are no longer on the list; keep only official ones.
+    if (!s.batAnswers || typeof s.batAnswers !== 'object' || Array.isArray(s.batAnswers)) s.batAnswers = {};
+    s.barriers = (Array.isArray(s.barriers) ? s.barriers : []).filter(k => barrierKeys.includes(k));
+    if (!s.barriers.includes(s.primary)) s.primary = s.barriers.length === 1 ? s.barriers[0] : '';
     let toast = '';
+    // Agreed plans from the care team (clinician-owned; never saved in the patient's state).
+    let deapPlans = [],
+      // Caregiver (patient 10+) only: plans for barriers only the caregiver reported. Never sent to the patient.
+      deapCgPlans = [],
+      deapPlansKey = '[]',
+      deapRenderPending = false,
+      // Demo-only clock offset in days for this patient's check-backs (set by the clinician page).
+      deapClockDays = 0,
+      // Unsent check-back answer while the patient is choosing.
+      checkDraft = {
+        taskId: null,
+        answer: '',
+        note: ''
+      };
+    // Set after a Continue tap with unanswered BAT items, to highlight them.
+    let batTried = false;
     const t = k => T[s.lang][k] || k;
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({
       '&': '&amp;',
@@ -968,7 +1577,7 @@
     const header = (eyebrow, title, desc) =>
       `<div class="hero">${eyebrow}</div><h2>${title}</h2><p class="muted">${desc}</p>`;
     const choices = (keys, selected, multi) => keys.map(k =>
-      `<button class="choice" aria-pressed="${multi?selected.includes(k):selected===k}" data-pick="${k}" data-multi="${multi?1:0}"><span>${esc(t(k))}</span><span class="check">${(multi?selected.includes(k):selected===k)?'✓':'○'}</span></button>`
+      `<button class="choice" aria-pressed="${multi?selected.includes(k):selected===k}" data-pick="${k}" data-multi="${multi?1:0}"><span>${esc(t(k))}</span><span class="check">${(multi?selected.includes(k):selected===k)?ic('checkCircle'):ic('circle')}</span></button>`
       ).join('');
     const foot = () => `<div class="foot">${t('footer')}</div>`;
     const todayKey = () => new Date().toLocaleDateString('en-CA');
@@ -978,40 +1587,189 @@
       return d.toLocaleDateString('en-CA')
     };
 
+    // "Read it to me": the browser's own speech, in the current language. No outside services.
+    // The button is hidden when the browser has no voice for that language.
+    function voiceFor() {
+      try {
+        const want = s.lang === 'es' ? 'es' : 'en';
+        return (window.speechSynthesis?.getVoices() || []).find(v => String(v.lang || '').toLowerCase().startsWith(want)) || null
+      } catch (e) {
+        return null
+      }
+    }
+    const speakBtn = text => voiceFor() ?
+      `<button type="button" class="speak" data-speak="${esc(text)}" aria-label="${esc(t('readAloud'))}" title="${esc(t('readAloud'))}">${ic('speaker')}</button>` : '';
+
+    function speak(text) {
+      const v = voiceFor();
+      if (!v) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = v.lang;
+      try {
+        u.voice = v
+      } catch (e) {
+        // Some browsers only accept their own voice objects; the language alone is enough.
+      }
+      speechSynthesis.speak(u)
+    }
+    // Voices often load after the page; show the buttons once they are ready.
+    try {
+      if (window.speechSynthesis) speechSynthesis.addEventListener('voiceschanged', () => render())
+    } catch (e) {}
+
+    // Discreet mode is the patient's own setting. Default: on for patients aged 10-17 (from their link).
+    const discreetDefault = () => !!(deapInvite && deapInvite.person === 'patient' && deapInvite.age >= 10 &&
+      deapInvite.age <= 17);
+    const isDiscreet = () => s.role !== 'caregiver' && (typeof s.discreet === 'boolean' ? s.discreet : discreetDefault());
+    // "Hi Maya, " / "Hi, " for neutral texts.
+    const hi = () => {
+      const n = s.patientName.trim();
+      return (s.lang === 'es' ? 'Hola' : 'Hi') + (n ? ' ' + n : '') + ', '
+    };
+
+    // The person who owns this record (patient 10+, or the caregiver of a child under 10).
+    const isOwner = () => !!(INVITE && deapInvite && (deapInvite.person === 'patient' || deapInvite.age < 10));
+
+    // Simulated text thread for the weekly check-in (no real SMS). Replies go to the server, not this state.
+    function textThread() {
+      if (!isOwner() || !s.textCheckin) return '';
+      const msgs = deapView?.textReplies || [];
+      const prompt = hi() + t(isDiscreet() ? 'txt_prompt' : 'txt_promptPlan');
+      return `<div class="card" id="textThread"><div class="small">${ic('phone')} ${t('txt_sim')}</div><div class="sms">${esc(prompt)}</div>${msgs.map(m=>`<div class="bubble">${esc(m.body)}</div><div class="sms">${esc(m.reply)}</div>`).join('')}<div class="btnrow">${['1','2','3'].map(n=>`<button class="btn secondary" data-text="${n}">${n}</button>`).join('')}</div><div style="display:flex;gap:8px;margin-top:9px"><input id="textBody" class="field" maxlength="160" placeholder="${esc(t('txt_typePh'))}"><button class="btn outline" data-text-send style="width:auto">${t('txt_send')}</button></div></div>`
+    }
+
+    async function sendText(body) {
+      try {
+        // Send any unsent change first (such as a new language), so the reply uses it straight away.
+        clearTimeout(deapSyncTimer);
+        deapPush();
+        await deapSending;
+        await fetch('/api/sms/inbound', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            token: INVITE,
+            body
+          })
+        });
+        await deapPoll();
+        render()
+      } catch (e) {}
+    }
+
+    // Has this person finished the 14-item checklist at least once?
+    const bat_done = () => batKeys.every(k => ['yes', 'no'].includes(s.batAnswers[k]));
+    // 6-month re-check (from the server): this person's next checklist is due.
+    const myRecheck = () => INVITE ? deapInvite?.recheck : deapView?.recheck;
+
+    function recheckCard() {
+      const r = myRecheck();
+      if (!r || !r.due) return '';
+      return `<div class="card soft" id="recheckCard"><div class="iconbubble">${ic('refresh')}</div><h3>${t('recheckTitle')}</h3><p class="muted">${t('recheckDesc')}</p>${btn(t('recheckBtn'),'retake')}</div>`
+    }
+
+    // Start a NEW assessment: fresh answers and a new batId. Earlier answers stay in the server history.
+    function retakeChecklist() {
+      Object.assign(s, {
+        batAnswers: {},
+        barriers: [],
+        primary: '',
+        other: '',
+        strategies: [],
+        batId: new Date().toISOString(),
+        step: 1
+      });
+      batTried = false;
+      go('onboard')
+    }
+
+    // Weekly answers from the app and from text replies, oldest first.
+    function allWeekly() {
+      const texts = (deapView?.weekly || []).filter(w => w.via === 'text');
+      return [...s.weekly, ...texts].sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    }
+
+    // Reminder preview. The greeting uses the reader's own name (the caregiver on the caregiver's page).
     function message() {
-      const name = s.patientName.trim();
-      const greeting = name ? (s.lang === 'es' ? 'Hola, ' : 'Hi, ') + name + '! ' : '';
+      const name = (s.role === 'caregiver' && s.caregiverName.trim() ? s.caregiverName : s.patientName).trim();
+      if (isDiscreet()) {
+        const tone = s.tone === 'short' ? 'd_remShort' : s.tone === 'encouraging' ? 'd_remEnc' : 'd_remFriendly';
+        return (s.lang === 'es' ? 'Hola' : 'Hi') + (name ? ' ' + name : '') + ', ' + t(tone) + (s.shift ? ' ' + t('shiftLabel') + '.' : '') + (s.routine ? ' ' + (s.lang === 'es' ?
+          'Tu rutina: ' : 'Your routine: ') + s.routine + '.' : '')
+      }
+      const greeting = name ? (s.lang === 'es' ? '¡Hola, ' : 'Hi, ') + name + '! ' : '';
       const tone = s.tone === 'short' ? 'reminderShort' : s.tone === 'encouraging' ? 'reminderEnc' :
         'reminderMsg';
       return greeting + t(tone) + (s.shift ? ' ' + t('shiftLabel') + '.' : '') + (s.routine ? ' ' + (s
         .lang === 'es' ? 'Tu rutina: ' : 'Your routine: ') + s.routine + '.' : '')
     }
 
+    // Onboarding steps that apply: 0 who, 1 BAT, 2 biggest problem (2+ yes), 3 ideas, 4 preferences.
+    function onboardSteps() {
+      // Step 3 shows ideas or a care-team message for the biggest barrier; skipped when there is neither.
+      const helpStep = s.barriers.length && (!s.primary || ideasFor(s.primary).length || strategyMessage[s
+        .primary]);
+      // With a personal link the server already knows who is answering, so step 0 is skipped.
+      return [...(INVITE ? [] : [0]), 1, ...(s.barriers.length > 1 ? [2] : []), ...(helpStep ? [3] : []), 4, ...(askShare() ? [5] : [])];
+    }
+
+    // 10 to 17 (families enrolled under the age rule): at the end of onboarding, ask whether to share
+    // plans and the weekly check-in with the caregiver. Both start off; both must be answered.
+    const askShare = () => !!(isPt10() && deapInvite.age < 18 && deapInvite.sharing?.ask && deapInvite.caregiverName &&
+      (s.step === 5 || typeof s.sharePlans !== 'boolean' || typeof s.shareWeekly !== 'boolean'));
+
+    function helpStep() {
+      // Keep only ideas that belong to the current biggest barrier.
+      s.strategies = s.strategies.filter(k => ideasFor(s.primary).includes(k));
+      const msg = strategyMessage[s.primary];
+      // Each idea gets a speaker next to it (a button cannot sit inside the choice button).
+      return msg ? `<div class="card soft" id="helpMessage"><div class="speakrow"><p style="margin:0">${t(msg)}</p>${speakBtn(t(msg))}</div></div>` :
+        ideasFor(s.primary).map(k => `<div class="speakrow">${choices([k], s.strategies, true)}${speakBtn(t(k))}</div>`).join('')
+    }
+
+    const batUnanswered = () => batKeys.filter(k => !['yes', 'no'].includes(s.batAnswers[k]));
+
+    function batList() {
+      return `<div class="batlist">${barrierKeys.map(k=>{const a=s.batAnswers[k];const missing=batTried&&k!=='other'&&!a;return `<div class="batrow${missing?' missing':''}" role="group" aria-labelledby="bat-${k}"><div class="batq" id="bat-${k}"><span>${esc(t(k))}</span>${speakBtn(t(k))}</div><div class="yn">${['yes','no'].map(v=>`<button class="ynbtn" data-bat="${k}" data-ans="${v}" aria-pressed="${a===v}">${t(v)}</button>`).join('')}</div>${k==='other'&&a==='yes'?`<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>`:''}</div>`}).join('')}</div>`
+    }
+
     function onboarding() {
+      const steps = onboardSteps();
+      if (!steps.includes(s.step)) s.step = steps.find(x => x >= s.step) ?? 4;
       const step = s.step;
-      const displayStep = step > 2 && s.barriers.length === 1 ? step : step + 1;
-      const totalSteps = s.barriers.length === 1 && step > 1 ? 4 : 5;
+      const displayStep = steps.indexOf(step) + 1;
+      const totalSteps = steps.length;
+      const eyebrow = `${String(displayStep).padStart(2,'0')} / ${String(totalSteps).padStart(2,'0')}`;
       let out =
         `<div class="step">${t('step')} ${displayStep} / ${totalSteps}</div><div class="progressbar"><div style="width:${displayStep/totalSteps*100}%"></div></div>`;
-      if (step === 0) out += header('01 / 05', t('role'), t('careNote')) + choices(['self',
+      if (step === 0) out += header(eyebrow, t('role'), t('careNote')) + choices(['self',
           'caregiver'], s.role, false) +
         `<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" autocomplete="off" value="${esc(s.patientName)}" placeholder="${esc(t('patientNameLabel'))}">` +
         (s.role === 'caregiver' ?
           `<label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" autocomplete="off" value="${esc(s.caregiverName)}" placeholder="${esc(t('caregiverNameLabel'))}">` :
           '') + `<p class="small">${t('nameHint')}</p>`;
-      if (step === 1) out += header('02 / 05', t('barrierTitle'), t('barrierDesc')) + choices(
-        barrierKeys, s.barriers, true) + (s.barriers.includes('other') ?
-        `<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>` :
-        '') + `<p class="small">${t('placeholder')}</p>`;
-      if (step === 2) out += header('03 / 05', t('primaryTitle'), t('primaryDesc')) + choices(s
+      // A kind note first: people tend to under-report barriers. The 14 questions are unchanged.
+      if (step === 1) out += header(eyebrow, t('barrierTitle'), t('barrierDesc')) +
+        `<div class="card soft" id="batKind"><div class="speakrow"><p style="margin:0">${t(s.role==='caregiver'?'batKindCg':'batKind')}</p>${speakBtn(t(s.role==='caregiver'?'batKindCg':'batKind'))}</div></div>` + batList();
+      if (step === 2) out += header(eyebrow, t('primaryTitle'), t('primaryDesc')) + choices(s
         .barriers, s.primary, false);
-      if (step === 3) out += header(s.barriers.length === 1 ? '03 / 04' : '04 / 05', t('strategyTitle'),
-        t('strategyDesc')) + choices(strategyKeys, s.strategies, true);
-      if (step === 4) out += header(s.barriers.length === 1 ? '04 / 04' : '05 / 05', t('personalize'),
+      if (step === 3) out += header(eyebrow, t('strategyTitle'),
+        strategyMessage[s.primary] ? '' : t('strategyDesc')) + helpStep();
+      if (step === 5) {
+        const cg = esc(deapInvite.caregiverName);
+        // Neither answer is pre-selected: a button is pressed only after the patient taps it.
+        out += header(eyebrow, tf('shareTitle', {
+          cg
+        }), t('shareLater')) + ['Plans', 'Weekly'].map(k => `<div class="batrow" role="group" aria-labelledby="share-${k}"><div class="batq" id="share-${k}"><span>${tf('shareQ'+k,{cg})}</span>${speakBtn(tf('shareQ'+k,{cg}))}</div><div class="yn">${[true,false].map(v=>`<button class="ynbtn" data-share="${k}" data-val="${v}" aria-pressed="${s['share'+k]===v}">${t(v?'yes':'no')}</button>`).join('')}</div></div>`).join('') + `<p class="small">${t('shareLater')}</p>`
+      }
+      if (step === 4) out += header(eyebrow, t('personalize'),
           t('personalizeDesc')) + prefs() +
         `<div class="card soft"><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div></div>`;
       out +=
-        `<div class="btnrow">${step?btn(t('back'),'back','secondary'):''}${btn(step===4?t('finish'):t('continue'),'next')}</div>`;
+        `<div class="btnrow">${steps.indexOf(step)>0?btn(t('back'),'back','secondary'):''}${btn(step===steps.at(-1)?t('finish'):t('continue'),'next')}</div>`;
       return out + foot()
     }
 
@@ -1019,70 +1777,237 @@
       return `<label class="label" for="time">${t('time')}</label><input id="time" class="field" type="time" value="${esc(s.time)}" ${s.shift?'disabled':''}><label class="choice" style="font-size:13px"><span>${t('shift')}</span><input id="shift" type="checkbox" ${s.shift?'checked':''} aria-label="${esc(t('shift'))}"></label><label class="label" for="channel">${t('channel')}</label><select id="channel" class="field">${['SMS','WhatsApp','Email'].map(x=>`<option ${s.channel===x?'selected':''}>${x}</option>`).join('')}</select><label class="label" for="tone">${t('tone')}</label><select id="tone" class="field">${['friendly','short','encouraging'].map(x=>`<option value="${x}" ${s.tone===x?'selected':''}>${t(x)}</option>`).join('')}</select><label class="label" for="routine">${t('routineLabel')}</label><input id="routine" class="field" maxlength="90" value="${esc(s.routine)}" placeholder="${esc(t('routinePlaceholder'))}">`
     }
 
+    // Check-back: due when the plan's check-back day has arrived (local calendar day).
+    const localDay = d => new Date(d).toLocaleDateString('en-CA');
+    const effectiveNow = () => new Date(Date.now() + deapClockDays * 864e5);
+    const isDue = p => !!p.dueDate && localDay(p.dueDate) <= localDay(effectiveNow());
+    // Plans this person is asked "Is your plan working?" about. With a personal link, "Who leads"
+    // decides who is asked (set by the server). A caregiver is always asked about plans for
+    // barriers only they reported, because the patient never sees those.
+    const checkPlans = () => [...(INVITE && deapInvite && !deapInvite.getsCheckbacks ? [] : deapPlans), ...(isCg10() ? deapCgPlans : [])];
+    // First plan (biggest problem first) whose current check-back this person has not answered.
+    const dueCheck = () => checkPlans().find(p => isDue(p) && (s.checkbacks || {})[p.taskId]?.for !== p.dueDate);
+
+    function checkBackCard() {
+      const p = dueCheck();
+      if (!p) return '';
+      if (checkDraft.taskId !== p.taskId) checkDraft = {
+        taskId: p.taskId,
+        answer: '',
+        note: ''
+      };
+      return `<div class="card" id="checkBack"><div class="iconbubble">${ic('check')}</div><div class="speakrow"><h3>${t('checkTitle')}</h3>${speakBtn([t('checkTitle'), p.patientText, t('check_working'), t('check_not_really'), t('check_change')].join('. '))}</div><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?ic('checkCircle'):ic('circle')}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
+    }
+
+    // A kind word when the care team marked a plan "Working" (keep checking). Only plans this person
+    // may see (the server already left out plans for barriers only the caregiver reported).
+    // No points or badges. Not shown on a caregiver's page about a patient aged 10+.
+    function workingCard() {
+      if (isCg10() || !deapPlans.some(p => p.status === 'keep_checking')) return '';
+      return `<div class="card soft" id="workingMsg"><div class="speakrow"><p style="margin:0">${t('workingMsg')}</p>${speakBtn(t('workingMsg'))}</div></div>`
+    }
+
+    // Plans the care team agreed with the patient (from the server), in the patient's own words.
+    function myPlans() {
+      if (isCg10()) return theirPlans();
+      return `<div class="card soft" id="myPlan"><div class="small">${isCgChild()?tf('cgPlan',{pt:esc(s.patientName)}):t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
+    }
+
+    // ---- Personal links: who this person is, and what they may see (the server enforces it) ----
+    const tf = (k, v = {}) => t(k).replace(/\{(\w+)\}/g, (_, n) => v[n] ?? '');
+    // Caregiver of a patient aged 10+: a separate person with their own answers.
+    const isCg10 = () => !!(INVITE && deapInvite && deapInvite.person === 'caregiver' && deapInvite.age >= 10);
+    // Caregiver who uses the app for a child under 10: name the child instead of "my".
+    const isCgChild = () => s.role === 'caregiver' && !isCg10() && !!s.patientName.trim();
+    const isPt10 = () => !!(INVITE && deapInvite && deapInvite.person === 'patient');
+
+    // What a caregiver (10+) sees of the patient: only what the server sent for this link.
+    function theirPlans() {
+      const pt = esc(deapInvite.patientName),
+        v = deapView || {};
+      const shared = deapInvite.sharing?.plans;
+      const plans = shared ? (deapPlans.length ? deapPlans.map(p => `<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join('') : `<h3 style="margin-top:8px">${tf('noPlanYet',{pt})}</h3>`) : `<p>${tf('plansPrivate',{pt})}</p>`;
+      // Each date once, with how many plans have a check-back that day: "Nov 19 (3 plans)".
+      const perDay = new Map();
+      (v.checkbackDates || []).forEach(d => {
+        const day = new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
+          month: 'short',
+          day: 'numeric'
+        });
+        perDay.set(day, (perDay.get(day) || 0) + 1)
+      });
+      const dates = [...perDay].map(([day, n]) => `${day} (${n} ${t(n === 1 ? 'planOne' : 'planMany')})`);
+      const wk = v.sharedWeekly ? `<div class="small" style="margin-top:10px">${tf('theirWeekly',{pt})}</div><p><span class="pill ${v.sharedWeekly.status==='yellow'?'yellow':v.sharedWeekly.status==='red'?'red':''}">${esc(t(v.sharedWeekly.status).split(' — ')[0])}</span></p>` : '';
+      return `<div class="card soft" id="myPlan"><div class="small">${tf('theirPlans',{pt})}</div>${plans}${dates.length?`<div class="small" style="margin-top:10px">${t('upcomingChecks')}</div><p id="checkDates">${esc(dates.join(' · '))}</p>`:''}${wk}</div>` + cgOwnPlans()
+    }
+
+    // Caregiver (patient 10+): plans for barriers only the caregiver reported. Kept apart from the patient's plans.
+    function cgOwnPlans() {
+      if (!deapCgPlans.length) return '';
+      const pt = esc(deapInvite.patientName);
+      const day = d => new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
+        month: 'short',
+        day: 'numeric'
+      });
+      return `<div class="card soft" id="cgOwnPlans"><div class="small">${t('cgOwnPlans')}</div><p class="small">${tf('cgOwnDesc',{pt})}</p>${deapCgPlans.map(p=>`<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${p.dueDate?`<div class="small" style="margin-top:6px">${t('nextCheck')}: ${esc(day(p.dueDate))}</div>`:''}</div>`).join('')}</div>`
+    }
+
+    // "Who sees what", in plain words, for this person.
+    function whoSeesCard() {
+      if (!INVITE || !deapInvite) return '';
+      const i = deapInvite,
+        cg = esc(i.caregiverName),
+        pt = esc(i.patientName),
+        sh = i.sharing || {};
+      let lines, toggles = '';
+      if (i.person === 'caregiver' && i.age < 10) lines = [tf('ws_under10', {
+        pt
+      }), t('ws_team')];
+      else if (i.person === 'caregiver' && sh.adult) {
+        // Patient 18 or over: only what the patient has given explicit permission to share.
+        const seen = [sh.plans ? t('ws_cgDates') : '', sh.plans ? tf('ws_cgPlans', {
+          pt
+        }) : '', sh.weekly ? tf('ws_cgWeekly', {
+          pt
+        }) : ''].filter(Boolean);
+        lines = [t('ws_team'), tf('ws_cgPtNot', {
+          pt
+        }), tf('ws_cgAdult', {
+          pt
+        }), seen.length ? t('ws_cgSees') + ' ' + seen.join('; ') + '.' : tf('ws_cgAdultNone', {
+          pt
+        }), tf('ws_cgNot', {
+          pt
+        }), ...(sh.plans ? [tf('ws_cgOwn', {
+          pt
+        })] : [])]
+      } else if (i.person === 'caregiver') lines = [t('ws_team'), tf('ws_cgPtNot', {
+        pt
+      }), t('ws_cgSees') + ' ' + [t('ws_cgDates'), sh.plans ? tf('ws_cgPlans', {
+        pt
+      }) : '', sh.weekly ? tf('ws_cgWeekly', {
+        pt
+      }) : ''].filter(Boolean).join('; ') + '.', tf('ws_cgNot', {
+        pt
+      }), tf('ws_cgOwn', {
+        pt
+      })];
+      else if (sh.adult) {
+        // 18 or over: nothing is shared without the patient's explicit permission (recorded with the date).
+        const given = at => at ? `<div class="small" style="margin:-4px 0 8px">${tf('permitGiven',{date:esc(new Date(at).toLocaleDateString(s.lang==='es'?'es':'en',{year:'numeric',month:'short',day:'numeric'}))})}</div>` : '';
+        lines = [t('ws_team'), tf('ws_adult', {
+          cg
+        }), tf('ws_ptCgNot', {
+          cg
+        }), tf('ws_ptNever', {
+          cg
+        }), t(isDiscreet() ? 'ws_discreetOn' : 'ws_discreetOff')];
+        toggles =
+          `<label class="choice" style="font-size:13px"><span>${tf('permitPlans',{cg})}</span><input id="permitPlans" type="checkbox" ${sh.plans?'checked':''}></label>${given(sh.plans&&sh.permPlansAt)}<label class="choice" style="font-size:13px"><span>${tf('permitWeekly',{cg})}</span><input id="permitWeekly" type="checkbox" ${sh.weekly?'checked':''}></label>${given(sh.weekly&&sh.permWeeklyAt)}`
+      } else {
+        lines = [t('ws_team'), tf('ws_teen', {
+          cg
+        }), tf('ws_ptCgNot', {
+          cg
+        }), tf('ws_ptNever', {
+          cg
+        }), t(isDiscreet() ? 'ws_discreetOn' : 'ws_discreetOff')];
+        // The patient (10 to 17) decides what the caregiver may see.
+        toggles =
+          `<label class="choice" style="font-size:13px"><span>${tf('ws_sharePlans',{cg})}</span><input id="sharePlans" type="checkbox" ${sh.plans?'checked':''}></label><label class="choice" style="font-size:13px"><span>${tf('ws_shareWeekly',{cg})}</span><input id="shareWeekly" type="checkbox" ${sh.weekly?'checked':''}></label>`
+      }
+      // Hand-off: who gets reminders and check-back questions right now.
+      const other = i.person === 'patient' ? cg : pt;
+      lines.push(i.getsReminders ? t('ws_remindYou') : tf('ws_remindOther', {
+        other
+      }));
+      return `<div class="card" id="whoSees"><h3>${t('ws_title')}</h3><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul>${toggles}<p class="small">${t('ws_proposed')}</p></div>`
+    }
+
     function today() {
       const logged = s.daily.some(x => x.date === todayKey());
-      return header('DEAP CONNECT', s.role === 'caregiver' ?
+      const takenToday = s.daily.some(x => x.date === todayKey() && x.status === 'reported_taken');
+      return header('KTx-CONNECT', s.role === 'caregiver' ?
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        `<div class="card soft"><div class="small">${t('plan')}</div><h3 style="margin-top:8px">${esc(s.plan||t('planDefault'))}</h3><span class="pill">${esc(s.primary?t(s.primary):t('noData'))}</span></div><div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(logged?'✓ '+t('todayLogged'):t('took'),'took',logged?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        recheckCard() + textThread() + checkBackCard() + workingCard() + myPlans() + `<div class="card"><div class="iconbubble">${ic('heart')}</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?ic('check')+' '+t('todayLogged'):isCgChild()?tf('cgTook',{pt:esc(s.patientName)}):t('took'),'took',takenToday?'secondary':'')}${btn(isCgChild()?tf('cgMissed',{pt:esc(s.patientName)}):t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
     function weekly() {
-      return header('CHECK-IN', t('weeklyTitle'), t('weeklyDesc')) +
-        `<div class="card soft"><div class="small">${t('plan')}</div><p>${esc(s.plan||t('planDefault'))}</p></div>` +
+      return header(t('eb_checkin'), t('weeklyTitle'), t('weeklyDesc')) +
+        myPlans() +
         choices(['green', 'yellow', 'red'], s.draftWeekly || '', false) +
         `<label class="label" for="weeklyNote">${t('note')}</label><textarea id="weeklyNote" class="field" rows="3" maxlength="400">${esc(s.draftNote||'')}</textarea><div style="height:14px"></div>${btn(t('send'),'submitWeekly')}` +
         foot()
     }
 
     function progress() {
-      const recent = s.daily.filter(x => x.date >= dateBefore(29));
-      const days = Array.from({
-        length: 30
-      }, (_, i) => {
-        const date = dateBefore(29 - i);
-        return `<div class="day ${recent.some(x=>x.date===date)?'done':'empty'}" title="${date}" aria-label="${date}: ${recent.some(x=>x.date===date)?'checked in':'no check-in'}">${new Date(date+'T12:00:00').getDate()}</div>`
-      }).join('');
-      const last = s.weekly.at(-1);
-      return header('YOUR JOURNEY', t('progressTitle'), t('progressDesc')) +
-        `<div class="statrow"><div class="stat"><strong>${recent.length}</strong><span>${t('days')} · ${t('last30')}</span></div><div class="stat"><strong>${s.weekly.length}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div><div class="card"><h3>${t('silence')}</h3><p class="muted">${t('nudgeText')}</p>${btn(s.silence?t('resetSilence'):t('simulate'),'silence','secondary')}</div>` +
+      // No scoreboard: one positive count, and no calendar, streaks, points or badges. Any check-in
+      // counts, including telling us about a missed dose.
+      const checkedDays = s.daily.filter(x => x.date >= dateBefore(29)).length;
+      // Latest weekly answer, from the app or by text reply.
+      const last = allWeekly().at(-1);
+      return header(t('eb_journey'), t('progressTitle'), t('progressDesc')) +
+        `<div class="statrow">${checkedDays?`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><strong>${checkedDays}</strong><span>${t('daysCheckedIn')} · ${t('last30')}</span></div>`:`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><span style="font-size:15px">${t('checkinsEmpty')}</span></div>`}<div class="stat" style="grid-column:1/-1"><strong id="latestWeekly" class="wk-${last?.status==='yellow'?'yellow':last?.status==='red'?'red':'green'}"${last?'':' style="font-size:17px"'}>${last?t(last.status).split(' — ')[0]:t('noWeekly')}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><p id="missedOk" style="margin-top:0">${t('missedOk')}</p><p class="small" style="margin-bottom:0">${t('progressDesc')}</p></div>${myPlans()}<div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
         foot()
     }
 
     function settings() {
-      return header('YOUR SPACE', t('settingsTitle'), t('personalizeDesc')) +
-        `<div class="card"><label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">${prefs()}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div><div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>${btn(t('reset'),'reset','outline')}` +
+      return header(t('eb_space'), t('settingsTitle'), t('personalizeDesc')) +
+        // With a personal link, who is answering comes from the link: no name fields, no role switch.
+        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}${s.role!=='caregiver'?`<label class="choice" style="font-size:13px"><span>${t('discreetLabel')}</span><input id="discreet" type="checkbox" ${isDiscreet()?'checked':''}></label>`:''}<label class="label" for="theme">${t('theme')}</label><select id="theme" class="field">${['system','light','dark'].map(x=>`<option value="${x}" ${(s.theme||'system')===x?'selected':''}>${t('theme_'+x)}</option>`).join('')}</select><label class="choice" style="font-size:13px"><span>${t('largeText')}</span><input id="largeText" type="checkbox" ${s.largeText?'checked':''}></label>${isOwner()?`<label class="choice" style="font-size:13px"><span>${t('textLabel')}</span><input id="textCheckin" type="checkbox" ${s.textCheckin?'checked':''}></label>`:''}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${bat_done()?btn(t('retakeChanged'),'retake','secondary'):''}<div style="height:9px"></div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
     }
 
+    // Light or dark: follow the phone ("System", the default) unless Light or Dark is chosen.
+    function applyTheme() {
+      const th = s.theme === 'light' || s.theme === 'dark' ? s.theme : '';
+      if (th) document.documentElement.dataset.theme = th;
+      else delete document.documentElement.dataset.theme;
+      const dark = th === 'dark' || (!th && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#08111a' : '#0f2333')
+    }
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme())
+    } catch (e) {}
+
     function render() {
       document.documentElement.lang = s.lang;
+      document.querySelector('.phone')?.classList.toggle('large', !!s.largeText);
+      applyTheme();
       document.getElementById('lang').textContent = s.lang === 'en' ? 'ESPAÑOL' : 'ENGLISH';
       document.getElementById('subtitle').textContent = t('subtitle');
+      // Discreet mode: the app header and tab title are neutral too.
+      const logo = document.querySelector('.phone .logo');
+      if (logo) logo.innerHTML = isDiscreet() ? esc(t('d_appName')) : 'KTx<span>-</span>CONNECT';
+      document.title = isDiscreet() ? t('d_appName') : 'KTx-CONNECT | Patient & Family';
       const screen = document.getElementById('screen');
       let html = '';
       if (toast) {
         html += `<div class="toast" role="status">${esc(toast)}</div>`;
         toast = ''
       }
-      if (s.view === 'sms') html +=
-        `<div class="iconbubble">✉</div>${header('KTx-CONNECT',t('smsTitle'),t('privacy'))}<div class="sms">${t('smsText')}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
+      if (s.view === 'sms') html += isDiscreet() ?
+        // Discreet invite preview: what shows on a lock screen, with no medical words.
+        `<div class="iconbubble">${ic('mail')}</div>${header(esc(t('d_appName')).toUpperCase(),t('d_smsTitle'),t('privacy'))}<div class="sms" id="smsPreview">${esc(hi()+t('d_smsText'))}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('d_smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
+        foot() :
+        `<div class="iconbubble">${ic('mail')}</div>${header('KTx-CONNECT',t('smsTitle'),t('privacy'))}<div class="sms" id="smsPreview">${t('smsText')}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
         foot();
       else if (s.view === 'onboard') html += onboarding();
       else if (s.view === 'today') html += today();
-      else if (s.view === 'missed') html += header('SUPPORT', t('missTitle'), t('missText')) +
+      else if (s.view === 'missed') html += header(t('eb_support'), t('missTitle'), t('missText')) +
         `<div class="card soft"><h3>${t('support')}</h3><p>${t('missText')}</p>${btn(t('contact'),'contact')}</div>${btn(t('backToday'),'today','secondary')}` +
         foot();
       else if (s.view === 'done') html +=
-        `<div class="iconbubble">✓</div>${header('THANK YOU',t('done'),t('doneSub'))}${btn(t('backToday'),'today')}` +
+        `<div class="iconbubble">${ic('check')}</div>${header(t('eb_thanks'),t('done'),t('doneSub'))}${btn(t('backToday'),'today')}` +
         foot();
       else if (s.view === 'weekly') html += weekly();
       else if (s.view === 'weeklyDone') {
         const last = s.weekly.at(-1);
         html +=
-          `<div class="iconbubble">♡</div>${header('CHECK-IN',t('thanks'),t('thanksDesc'))}<div class="card"><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${t(last?.status||'green')}</span><p>${t('swap')}</p>${btn(t('contact'),'contact','outline')}</div>${btn(t('backToday'),'today')}` +
+          `<div class="iconbubble">${ic('heart')}</div>${header(t('eb_checkin'),t('thanks'),t('thanksDesc'))}<div class="card"><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${t(last?.status||'green')}</span><p>${t('swap')}</p>${btn(t('contact'),'contact','outline')}</div>${btn(t('backToday'),'today')}` +
           foot()
       } else if (s.view === 'progress') html += progress();
       else if (s.view === 'settings') html += settings();
@@ -1092,7 +2017,7 @@
         s.view);
       tabs.classList.toggle('hidden', !show);
       tabs.innerHTML = show ? ['today', 'weekly', 'progress', 'settings'].map((k, i) =>
-        `<button class="tab ${s.view===k||(k==='today'&&['missed','done'].includes(s.view))||(k==='weekly'&&s.view==='weeklyDone')?'active':''}" data-action="${k}" aria-label="${t(k)}"><span aria-hidden="true">${['⌂','♡','▥','⚙'][i]}</span>${t(k)}</button>`
+        `<button class="tab ${s.view===k||(k==='today'&&['missed','done'].includes(s.view))||(k==='weekly'&&s.view==='weeklyDone')?'active':''}" data-action="${k}" aria-label="${t(k)}">${ic(['home','heart','chart','gear'][i])}${t(k)}</button>`
         ).join('') : '';
     }
 
@@ -1100,7 +2025,8 @@
       s.view = view;
       save();
       render();
-      document.querySelector('.screen')?.scrollTo(0, 0)
+      document.querySelector('.screen')?.scrollTo(0, 0);
+      window.scrollTo(0, 0)
     }
 
     function handleAction(a) {
@@ -1110,29 +2036,38 @@
         return go('onboard')
       }
       if (a === 'back') {
-        s.step = s.step === 3 && s.barriers.length === 1 ? 1 : Math.max(0, s.step - 1);
+        const steps = onboardSteps();
+        s.step = steps[Math.max(0, steps.indexOf(s.step) - 1)];
         return go('onboard')
       }
       if (a === 'next') {
         if (s.step === 0 && !s.patientName.trim()) return notice(t('nameRequired'));
         if (s.step === 0 && s.role === 'caregiver' && !s.caregiverName.trim()) return notice(t(
           'caregiverRequired'));
-        if (s.step === 1 && !s.barriers.length) return notice(t('choose'));
-        if (s.step === 2 && !s.primary) return notice(t('chooseOne'));
-        if (s.step === 1 && s.barriers.length === 1) {
-          s.primary = s.barriers[0];
-          s.step = 3;
-          return go('onboard')
+        if (s.step === 1 && batUnanswered().length) {
+          batTried = true;
+          notice(t('answerAll'));
+          document.querySelector('.batrow.missing')?.scrollIntoView({
+            block: 'center'
+          });
+          return
         }
-        if (s.step === 4) {
-          s.plan = s.strategies.map(k => t(k)).join(' + ') || t('planDefault');
+        if (s.step === 1) batTried = false;
+        if (s.step === 2 && !s.primary) return notice(t('chooseOne'));
+        if (s.step === 5 && (typeof s.sharePlans !== 'boolean' || typeof s.shareWeekly !== 'boolean')) return notice(t('shareBoth'));
+        const steps = onboardSteps();
+        if (s.step === steps.at(-1)) {
+          s.strategies = s.strategies.filter(k => ideasFor(s.primary).includes(k));
           return go('today')
         }
-        s.step++;
+        s.step = steps[steps.indexOf(s.step) + 1];
         return go('onboard')
       }
       if (a === 'took') {
-        if (!s.daily.some(x => x.date === todayKey())) s.daily.push({
+        // Latest tap of the day wins.
+        const record = s.daily.find(x => x.date === todayKey());
+        if (record) record.status = 'reported_taken';
+        else s.daily.push({
           date: todayKey(),
           status: 'reported_taken'
         });
@@ -1152,6 +2087,28 @@
         save();
         return notice(t('contactDone'))
       }
+      if (a === 'retake') return retakeChecklist();
+      if (a === 'sendCheck') {
+        const p = checkPlans().find(x => x.taskId === checkDraft.taskId);
+        if (!p) return;
+        if (!checkDraft.answer) return notice(t('chooseOne'));
+        // Patient-owned answer, kept exactly as written.
+        s.checkbacks = Object.assign({}, s.checkbacks, {
+          [p.taskId]: {
+            answer: checkDraft.answer,
+            note: checkDraft.note,
+            at: new Date().toISOString(),
+            for: p.dueDate
+          }
+        });
+        checkDraft = {
+          taskId: null,
+          answer: '',
+          note: ''
+        };
+        save();
+        return notice(t('checkThanks'))
+      }
       if (a === 'submitWeekly') {
         if (!s.draftWeekly) return notice(t('chooseOne'));
         s.weekly.push({
@@ -1162,10 +2119,6 @@
         s.draftWeekly = '';
         s.draftNote = '';
         return go('weeklyDone')
-      }
-      if (a === 'silence') {
-        s.silence = !s.silence;
-        return go('progress')
       }
       if (a === 'savePrefs') {
         if (!s.patientName.trim()) return notice(t('nameRequired'));
@@ -1181,7 +2134,13 @@
           deapId = 'patient-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36));
           localStorage.setItem(DEAP_ID_KEY, deapId);
           deapCarePlan = '';
-          deapEscStage = 'none';
+          deapLastSent = null;
+          deapPlans = [];
+          deapCgPlans = [];
+          deapPlansKey = '[]';
+          deapClockDays = 0;
+          // With a personal link, reset keeps who this person is.
+          if (INVITE && deapInvite) deapApplyInvite(true);
           return go('sms')
         }
       }
@@ -1192,15 +2151,57 @@
         handleAction(a.dataset.action);
         return
       }
+      const txt = e.target.closest('[data-text],[data-text-send]');
+      if (txt) {
+        const body = txt.dataset.text || document.getElementById('textBody')?.value || '';
+        if (body.trim()) sendText(body);
+        return
+      }
+      const sp = e.target.closest('[data-speak]');
+      if (sp) {
+        speak(sp.dataset.speak);
+        return
+      }
+      const chk = e.target.closest('[data-check]');
+      if (chk) {
+        checkDraft.answer = chk.dataset.check;
+        render();
+        document.querySelector(`[data-check="${checkDraft.answer}"]`)?.focus();
+        return
+      }
+      const sh = e.target.closest('[data-share]');
+      if (sh) {
+        const k = sh.dataset.share,
+          v = sh.dataset.val === 'true';
+        s['share' + k] = v;
+        if (deapInvite?.sharing) deapInvite.sharing[k === 'Plans' ? 'plans' : 'weekly'] = v;
+        save();
+        render();
+        document.querySelector(`[data-share="${k}"][data-val="${v}"]`)?.focus();
+        return
+      }
+      const bat = e.target.closest('[data-bat]');
+      if (bat) {
+        const k = bat.dataset.bat,
+          v = bat.dataset.ans;
+        // Marks which assessment these answers belong to (set on the first answer).
+        if (!s.batId) s.batId = new Date().toISOString();
+        s.batAnswers[k] = v;
+        // "Yes" answers are the patient's barriers, kept in BAT order.
+        s.barriers = barrierKeys.filter(x => s.batAnswers[x] === 'yes');
+        s.primary = s.barriers.length === 1 ? s.barriers[0] : (s.barriers.includes(s.primary) ? s
+          .primary : '');
+        save();
+        render();
+        document.querySelector(`[data-bat="${k}"][data-ans="${v}"]`)?.focus();
+        return
+      }
       const pick = e.target.closest('[data-pick]');
       if (pick) {
         const k = pick.dataset.pick;
         if (pick.dataset.multi === '1') {
-          const arr = s.step === 1 ? s.barriers : s.strategies;
-          s.step === 1 || s.step === 3 ? arr.includes(k) ? arr.splice(arr.indexOf(k), 1) : arr.push(
-            k) : null;
-          if (s.step === 1) s.primary = s.barriers.length === 1 ? s.barriers[0] : (s.barriers
-            .includes(s.primary) ? s.primary : '')
+          if (s.step === 3) s.strategies.includes(k) ? s.strategies.splice(s.strategies.indexOf(k), 1) : s
+            .strategies.push(k)
         } else if (s.view === 'weekly') s.draftWeekly = k;
         else if (s.view === 'settings') s.role = k;
         else if (s.step === 0) s.role = k;
@@ -1214,6 +2215,10 @@
       if (['patientName', 'caregiverName'].includes(id)) s[id] = e.target.value;
       if (id === 'other') s.other = e.target.value;
       if (id === 'weeklyNote') s.draftNote = e.target.value;
+      if (id === 'checkNote') {
+        checkDraft.note = e.target.value;
+        return
+      }
       if (['routine', 'time', 'patientName'].includes(id)) {
         s[id] = e.target.value;
         save();
@@ -1225,6 +2230,37 @@
     });
     document.addEventListener('change', e => {
       const id = e.target.id;
+      // Patient (10+) chooses what the caregiver may see; saved in the patient's own state.
+      if (id === 'discreet' || id === 'textCheckin' || id === 'largeText') {
+        s[id] = e.target.checked;
+        save();
+        render();
+        return
+      }
+      if (id === 'permitPlans' || id === 'permitWeekly') {
+        s[id] = e.target.checked;
+        if (deapInvite?.sharing) {
+          const k = id === 'permitPlans' ? 'plans' : 'weekly';
+          deapInvite.sharing[k] = e.target.checked;
+          deapInvite.sharing[k === 'plans' ? 'permPlansAt' : 'permWeeklyAt'] = e.target.checked ? new Date().toISOString() : null
+        }
+        save();
+        render();
+        return
+      }
+      if (id === 'sharePlans' || id === 'shareWeekly') {
+        s[id] = e.target.checked;
+        if (deapInvite?.sharing) deapInvite.sharing[id === 'sharePlans' ? 'plans' : 'weekly'] = e.target.checked;
+        save();
+        render();
+        return
+      }
+      if (id === 'theme') {
+        s.theme = e.target.value;
+        save();
+        render();
+        return
+      }
       if (id === 'shift') s.shift = e.target.checked;
       if (id === 'channel') s.channel = e.target.value;
       if (id === 'tone') s.tone = e.target.value;
@@ -1257,37 +2293,46 @@
     }
     let deapSyncTimer = null,
       deapSending = Promise.resolve(),
+      deapLastSent = null,
       deapCarePlan = '';
     const deapBanner = document.createElement('div');
     deapBanner.id = 'deapConnection';
     deapBanner.setAttribute('role', 'status');
-    deapBanner.style.cssText =
-      'position:fixed;bottom:8px;left:8px;z-index:99;padding:5px 10px;border-radius:20px;background:#e4f5eb;color:#165b46;font:600 11px system-ui;box-shadow:0 2px 9px #0002';
+    deapBanner.className = 'conn';
     deapBanner.textContent = 'Connecting to care-team demo…';
-    document.body.appendChild(deapBanner);
+    // In the header (not floating), so it can never sit on top of the footer text or tab bar.
+    document.querySelector('.top').appendChild(deapBanner);
+
+    // Shown when the care team has no follow-up note, in the patient's language.
+    const deapNoNote = () => s.lang === 'es' ? 'Tu equipo aún no ha agregado un mensaje.' :
+      'Your care team has not added a follow-up note yet.';
 
     function deapStatus(ok) {
-      deapBanner.textContent = ok ? '● Connected to care-team demo' :
-      '○ Offline — saved on this device';
-      deapBanner.style.background = ok ? '#e4f5eb' : '#fff2d8';
+      deapBanner.textContent = ok ? 'Connected to care-team demo' :
+      'Offline — saved on this device';
+      deapBanner.className = ok ? 'conn' : 'conn off';
     }
 
     function deapPush() {
       if (!s.patientName.trim()) return;
-      const snapshot = JSON.parse(JSON.stringify(s));
-      deapSending = deapSending.catch(() => {}).then(() => fetch('/api/patients/' + encodeURIComponent(
-        deapId), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          state: snapshot
-        })
-      }).then(r => {
-        if (!r.ok) throw Error('Sync failed');
-        deapStatus(true)
-      }).catch(() => deapStatus(false)));
+      deapSending = deapSending.catch(() => {}).then(() => {
+        const id = deapId;
+        const body = JSON.stringify({
+          state: s
+        });
+        if (id + body === deapLastSent) return;
+        return fetch(deapUrl(), {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body
+        }).then(r => {
+          if (!r.ok) throw Error('Sync failed');
+          deapLastSent = id + body;
+          deapStatus(true)
+        }).catch(() => deapStatus(false))
+      });
     }
 
     function deapSchedule() {
@@ -1301,23 +2346,79 @@
       deapNativeSetItem.call(this, key, value);
       if (this === localStorage && key === KEY) deapSchedule()
     };
+    // Personal link: talk only to this person's invite endpoint. Walk-in demo: the anonymous id.
+    const deapUrl = () => INVITE ? '/api/invite/' + encodeURIComponent(INVITE) : '/api/patients/' +
+      encodeURIComponent(deapId);
+
+    // Fill in who this person is from their link (names, role, language).
+    function deapApplyInvite(force) {
+      const inv = deapInvite;
+      if (!force && s.patientName.trim()) return;
+      s.patientName = inv.patientName;
+      s.patientLastInitial = inv.patientLastInitial;
+      s.caregiverName = inv.caregiverName;
+      s.role = inv.person === 'caregiver' ? 'caregiver' : 'self';
+      s.lang = inv.lang === 'es' ? 'es' : 'en';
+      save();
+      render()
+    }
+
     async function deapPoll() {
-      if (!s.patientName.trim()) return;
+      if (!INVITE && !s.patientName.trim()) return;
       try {
-        const r = await fetch('/api/patients/' + encodeURIComponent(deapId), {
+        const r = await fetch(deapUrl(), {
           cache: 'no-store'
         });
+        if (INVITE && r.status === 404) {
+          deapBanner.textContent = t('badLink');
+          deapBanner.className = 'conn off';
+          return
+        }
+        // Server no longer has this patient (e.g. demo database was reset): send state again.
+        if (r.status === 404) deapLastSent = null;
         if (!r.ok) return;
         const data = await r.json();
         deapStatus(true);
+        if (!INVITE) deapView = data.patient;
+        if (INVITE) {
+          const first = !deapInvite;
+          deapInvite = data.invite;
+          deapView = data.patient;
+          // New device for this link: pick up this person's saved answers instead of overwriting them.
+          if (first && !deapHadLocal && data.ownState?.patientName) {
+            s = Object.assign(fresh(), data.ownState);
+            save();
+            render()
+          } else deapApplyInvite(false)
+        }
         const cp = data.patient?.carePlan || '';
         if (cp !== deapCarePlan) {
           deapCarePlan = cp;
           const el = document.getElementById('deapCarePlan');
-          if (el) el.textContent = cp || 'Your care team has not added a follow-up note yet.';
+          if (el) el.textContent = cp || deapNoNote();
         }
+        deapUpdatePlans(data.patient?.plans || [], data.patient?.clockOffsetDays || 0, data.patient?.caregiverPlans || []);
       } catch (e) {
         deapStatus(false)
+      }
+    }
+
+    // Show new or changed plans; wait while the patient is typing so nothing they type is lost.
+    function deapUpdatePlans(plans, clockDays, cgPlans) {
+      // Also re-render when what this link may see changes (sharing, who leads, check-back dates).
+      const key = JSON.stringify([plans, clockDays, cgPlans, deapInvite, deapView?.checkbackDates, deapView?.sharedWeekly,
+        deapView?.recheck
+      ]);
+      if (key !== deapPlansKey) {
+        deapPlans = plans;
+        deapCgPlans = cgPlans;
+        deapClockDays = clockDays;
+        deapPlansKey = key;
+        deapRenderPending = true
+      }
+      if (deapRenderPending && !document.activeElement?.matches('input,textarea,select')) {
+        deapRenderPending = false;
+        render()
       }
     }
     const deapOriginalRender = render;
@@ -1329,72 +2430,21 @@
           const box = document.createElement('div');
           box.className = 'card soft';
           box.innerHTML = s.lang === 'es' ?
-            '<h3>Seguimiento del equipo</h3><p id="deapCarePlan"></p><p class="small">Para preguntas médicas, contacte a su equipo de trasplante.</p>' :
+            '<h3>Seguimiento del equipo</h3><p id="deapCarePlan"></p><p class="small">Para preguntas médicas, contacta a tu equipo de trasplante.</p>' :
             '<h3>Care-team follow-up</h3><p id="deapCarePlan"></p><p class="small">Updates from your care team appear here in this demo. For medical questions, contact your transplant team.</p>';
-          screen.appendChild(box);
-          document.getElementById('deapCarePlan').textContent = deapCarePlan || (s.lang === 'es' ?
-            'Su equipo aún no ha agregado un mensaje.' :
-            'Your care team has not added a follow-up note yet.');
+          // Above the footer line, not after it.
+          screen.insertBefore(box, screen.querySelector(':scope > .foot'));
+          document.getElementById('deapCarePlan').textContent = deapCarePlan || deapNoNote();
         }
       }
     };
     render();
     deapPoll();
+    // One fetch per poll; deapPush only sends when the state changed since the last successful send.
     setInterval(() => {
       deapPoll();
       deapPush()
     }, 5000);
-
-    // Read-only, simulated engagement status; never represents medical monitoring.
-    let deapEscStage = 'none';
-    const deapPollOriginal = deapPoll;
-    deapPoll = async function() {
-      await deapPollOriginal();
-      if (!s.patientName.trim()) return;
-      try {
-        const r = await fetch('/api/patients/' + encodeURIComponent(deapId), {
-          cache: 'no-store'
-        });
-        if (!r.ok) return;
-        const data = await r.json();
-        const stage = data.patient?.escalation?.stage || 'none';
-        if (stage !== deapEscStage) {
-          deapEscStage = stage;
-          render()
-        }
-      } catch (e) {}
-    };
-    const deapRenderBeforeEsc = render;
-    render = function() {
-      deapRenderBeforeEsc();
-      if (s.view === 'today' && s.patientName.trim()) {
-        const screen = document.getElementById('screen');
-        if (screen) {
-          const card = document.createElement('div');
-          card.className = 'card soft';
-          card.setAttribute('role', 'status');
-          const title = document.createElement('h3');
-          title.textContent = s.lang === 'es' ? 'Seguimiento de participación' :
-            'Engagement follow-up';
-          const info = document.createElement('p');
-          info.textContent = deapEscStage === 'clinician_review' ? (s.lang === 'es' ?
-              'No se registró una respuesta reciente. Se marcó para revisión del equipo (solo simulación).' :
-              'No recent response recorded. Flagged for care-team review (simulation only).') :
-            deapEscStage === 'caregiver_notice' ? (s.lang === 'es' ?
-              'Se simuló un aviso al cuidador; no se envió ningún mensaje.' :
-              'Caregiver notification simulated; no message was sent.') : (s.lang === 'es' ?
-              'No hay avisos pendientes por falta de respuesta.' : 'No overdue engagement notices.');
-          const disclaimer = document.createElement('p');
-          disclaimer.className = 'small';
-          disclaimer.textContent = s.lang === 'es' ?
-            'No responder no significa que se haya omitido una dosis. Si alguien está inconsciente, llame al 911.' :
-            'No response does not mean a dose was missed. If someone is unconscious or unresponsive, call 911.';
-          card.append(title, info, disclaimer);
-          screen.appendChild(card)
-        }
-      }
-    };
-    render();
   </script>
  </body>
 </html>
