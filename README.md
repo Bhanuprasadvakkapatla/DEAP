@@ -69,7 +69,7 @@ For each barrier task the owner agrees **one concrete plan** with the patient (w
 
 ### Families: patient and caregiver separately (must-keep #2)
 
-The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link only (the caregiver is the user). 10 and older: a patient link and a caregiver link. Each link (`patient.html?invite=TOKEN`) is one person with their own answers; two links in the same browser are two people. Each person answers the 14-item BAT on their own; tasks show "Reported by: Patient / Caregiver / Both", and the care team sees where the answers differ.
+The clinician enrolls a family (**Enroll family**) with the patient's date of birth (age 0 to 25). The server works out the age whenever it is needed, so every age rule changes by itself on a birthday; screens show only the age, and the date of birth is shown to the care team only (patient detail, Family). On the 10th birthday the child gets their own link automatically, and the caregiver's earlier answers move to the caregiver's own record. Databases made before the date of birth was stored keep using the saved age. Under 10: a caregiver link only (the caregiver is the user). 10 and older: a patient link and a caregiver link. Each link (`patient.html?invite=TOKEN`) is one person with their own answers; two links in the same browser are two people. Each person answers the 14-item BAT on their own; tasks show "Reported by: Patient / Caregiver / Both", and the care team sees where the answers differ.
 
 **Who sees what.** Proposed privacy rules for the demo; the clinical team decides the real rules.
 

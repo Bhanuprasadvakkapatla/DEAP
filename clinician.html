@@ -1035,7 +1035,7 @@
     }
 
     function table(items) {
-      return `<div class="panel"><div class="toolbar"><input id="search" type="search" placeholder="Search fictional patient names…" value="${esc(search)}" aria-label="Search patients"><select id="filter" aria-label="Filter by status"><option value="all">All statuses</option>${Object.entries(statuses).map(([k,v])=>`<option value="${k}" ${filter===k?'selected':''}>${v}</option>`).join('')}</select></div><div class="scroll"><table><thead><tr><th>Patient</th><th>Primary barrier</th><th>Last check-in</th><th>Support requests</th><th>Status</th><th>Action</th></tr></thead><tbody>${items.length?items.map(p=>`<tr data-id="${esc(p.id)}"><td><div class="name">${patientName(p)}</div><div class="meta">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—'):'Patient'} · ${esc(p.lang?.toUpperCase()||'EN')}</div></td><td>${esc(names[p.primary]||'Not assessed')}</td><td>${shortDate(p.lastEngagement)}</td><td>${p.openRequests||0} open<div class="meta">${p.contactRequests||0} total</div></td><td>${pill(p.status)}<div class="meta">${esc((p.attentionReasons||[]).join(' · '))}</div>${ownWords(p)?`<div class="meta ownwords clamp" title="${esc(ownWords(p))}">In the patient's own words: “${esc(ownWords(p))}”</div>`:''}</td><td><button class="link" data-open="${esc(p.id)}">View details →</button></td></tr>`).join(''):`<tr><td colspan="6" class="empty">No patients match your filters.</td></tr>`}</tbody></table></div></div>`
+      return `<div class="panel"><div class="toolbar"><input id="search" type="search" placeholder="Search fictional patient names…" value="${esc(search)}" aria-label="Search patients"><select id="filter" aria-label="Filter by status"><option value="all">All statuses</option>${Object.entries(statuses).map(([k,v])=>`<option value="${k}" ${filter===k?'selected':''}>${v}</option>`).join('')}</select></div><div class="scroll"><table><thead><tr><th>Patient</th><th>Primary barrier</th><th>Last check-in</th><th>Support requests</th><th>Status</th><th>Action</th></tr></thead><tbody>${items.length?items.map(p=>`<tr data-id="${esc(p.id)}"><td><div class="name">${patientName(p)}</div><div class="meta">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—'):'Patient'} · ${esc(p.lang?.toUpperCase()||'EN')}${p.family?' · age '+esc(p.family.age):''}</div></td><td>${esc(names[p.primary]||'Not assessed')}</td><td>${shortDate(p.lastEngagement)}</td><td>${p.openRequests||0} open<div class="meta">${p.contactRequests||0} total</div></td><td>${pill(p.status)}<div class="meta">${esc((p.attentionReasons||[]).join(' · '))}</div>${ownWords(p)?`<div class="meta ownwords clamp" title="${esc(ownWords(p))}">In the patient's own words: “${esc(ownWords(p))}”</div>`:''}</td><td><button class="link" data-open="${esc(p.id)}">View details →</button></td></tr>`).join(''):`<tr><td colspan="6" class="empty">No patients match your filters.</td></tr>`}</tbody></table></div></div>`
     }
 
     function overview() {
@@ -1230,6 +1230,26 @@
       patient: 'Patient leads'
     };
     const defaultLeads = age => age < 10 ? 'parent' : age < 18 ? 'shared' : 'patient';
+    // Whole years from a YYYY-MM-DD date of birth to today, or null if it is not a real date.
+    // The server works the age out again and is the one that decides.
+    function ageFromDob(v) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+      if (!m) return null;
+      const [y, mo, d] = m.slice(1).map(Number);
+      const b = new Date(y, mo - 1, d);
+      if (b.getFullYear() !== y || b.getMonth() !== mo - 1 || b.getDate() !== d) return null;
+      const t = new Date();
+      return t.getFullYear() - y - ((t.getMonth() + 1 < mo || (t.getMonth() + 1 === mo && t.getDate() < d)) ? 1 : 0)
+    }
+    // Plain-English problem with a date of birth, or '' if it is fine (age 0 to 25).
+    function dobProblem(v) {
+      if (!v) return 'Please enter the date of birth.';
+      const age = ageFromDob(v);
+      if (age === null) return 'Please enter the date of birth as a real date.';
+      if (age < 0) return 'The date of birth cannot be in the future.';
+      if (age > 25) return `This date of birth gives age ${age}. Patients must be 0 to 25 years old.`;
+      return ''
+    }
     // Address a phone can use (from the server). Falls back to this page's own address.
     let phone = {
       phoneAccess: false,
@@ -1296,7 +1316,7 @@
     // (The side-by-side answers have their own section.)
     function familyBody(p) {
       const f = p.family;
-      return `<div id="familyPanel"><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong><div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><label class="muted" for="leadsSelect">Change who leads</label><select id="leadsSelect">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}" ${f.leads===k?'selected':''}>${v}</option>`).join('')}</select><span id="leadsMsg" class="muted" role="status"></span></div><div class="meta">${f.leads==='parent'?`Reminders and check-backs go to ${esc(f.caregiverName)}.`:f.leads==='shared'?`Reminders and check-backs go to ${esc(p.patientName)} and ${esc(f.caregiverName)}.`:`Reminders and check-backs go to ${esc(p.patientName)} only; no caregiver notice stage.`}</div></div>${whoSeesSummary(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
+      return `<div id="familyPanel"><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong>${f.dob?`<div class="meta" id="dobNow">Date of birth: ${esc(new Date(f.dob+'T12:00:00').toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}))} (care team only)</div>`:''}<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><label class="muted" for="leadsSelect">Change who leads</label><select id="leadsSelect">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}" ${f.leads===k?'selected':''}>${v}</option>`).join('')}</select><span id="leadsMsg" class="muted" role="status"></span></div><div class="meta">${f.leads==='parent'?`Reminders and check-backs go to ${esc(f.caregiverName)}.`:f.leads==='shared'?`Reminders and check-backs go to ${esc(p.patientName)} and ${esc(f.caregiverName)}.`:`Reminders and check-backs go to ${esc(p.patientName)} only; no caregiver notice stage.`}</div></div>${whoSeesSummary(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
     }
 
     // Who handles a packet role's work at this center (itself, or where it is routed).
@@ -1316,7 +1336,7 @@
 
     function enroll() {
       const r = enrollResult;
-      return `<div class="panel" id="enrollPanel"><h2>Enroll a family</h2><p class="muted">Fictional names only. Under 10: the caregiver answers. 10 and older: the patient and the caregiver each get their own link.</p><div class="enrollgrid"><label>Patient first name<input id="enFirst" maxlength="45"></label><label>Last initial<input id="enInitial" maxlength="1" style="width:70px"></label><label>Patient age<input id="enAge" type="number" min="0" max="30" style="width:90px"></label><label>Language<select id="enLang"><option value="en">English</option><option value="es">Spanish</option></select></label><label>Caregiver first name<input id="enCaregiver" maxlength="45"></label><label>Who leads<select id="enLeads">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label></div><div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="button" id="enrollBtn">Enroll family</button><span id="enrollMsg" class="muted" role="status"></span></div></div>${r?`<div class="panel" id="enrollLinks"><h2>Personal links for ${esc(r.name)}</h2>${linkList(r.family, r.name)}<button class="link" data-open="${esc(r.id)}">View patient →</button></div>`:''}`
+      return `<div class="panel" id="enrollPanel"><h2>Enroll a family</h2><p class="muted">Fictional names only. Under 10: the caregiver answers. 10 and older: the patient and the caregiver each get their own link.</p><div class="enrollgrid"><label>Patient first name<input id="enFirst" maxlength="45"></label><label>Last initial<input id="enInitial" maxlength="1" style="width:70px"></label><label>Date of birth<input id="enDob" type="date" max="${new Date().toLocaleDateString('en-CA')}"><span class="meta" id="enAgeNow"></span></label><label>Language<select id="enLang"><option value="en">English</option><option value="es">Spanish</option></select></label><label>Caregiver first name<input id="enCaregiver" maxlength="45"></label><label>Who leads<select id="enLeads">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label></div><div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="button" id="enrollBtn">Enroll family</button><span id="enrollMsg" class="muted" role="status"></span></div></div>${r?`<div class="panel" id="enrollLinks"><h2>Personal links for ${esc(r.name)}</h2>${linkList(r.family, r.name)}<button class="link" data-open="${esc(r.id)}">View patient →</button></div>`:''}`
     }
 
     function guide() {
@@ -1507,10 +1527,15 @@
       }
       if (e.target.id === 'enrollBtn') {
         const b = e.target;
+        const dobMsg = dobProblem(el('enDob').value);
+        if (dobMsg) {
+          el('enrollMsg').textContent = dobMsg;
+          return
+        }
         const body = {
           patientName: el('enFirst').value,
           patientLastInitial: el('enInitial').value,
-          age: el('enAge').value === '' ? null : Number(el('enAge').value),
+          dob: el('enDob').value,
           lang: el('enLang').value,
           caregiverName: el('enCaregiver').value,
           leads: el('enLeads').value
@@ -1744,8 +1769,11 @@
     });
     document.addEventListener('input', e => {
       // Who leads follows the age (under 10 / 10-17 / 18+) until it is chosen by hand.
-      if (e.target.id === 'enAge' && !leadsTouched && e.target.value !== '') el('enLeads').value = defaultLeads(
-        Number(e.target.value));
+      if (e.target.id === 'enDob') {
+        const age = ageFromDob(e.target.value);
+        el('enAgeNow').textContent = age === null ? '' : 'Age today: ' + age;
+        if (!leadsTouched && age !== null) el('enLeads').value = defaultLeads(age)
+      }
       if (e.target.id === 'search') {
         search = e.target.value;
         const caret = e.target.selectionStart;

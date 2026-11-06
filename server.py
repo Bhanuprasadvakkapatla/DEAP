@@ -105,6 +105,67 @@ def default_leads(age):
     return "parent" if age < 10 else "shared" if age < 18 else "patient"
 
 
+# Age is worked out from the date of birth whenever it is needed, so every age rule changes by
+# itself on a birthday. The date of birth is for the care team only; family pages get the age.
+MAX_AGE = 25
+
+
+def age_on(dob, today):
+    """Whole years from dob to today."""
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+def fam_age(f):
+    """Age today for one families row. Databases made before the date of birth was stored use the saved age."""
+    if f["dob"]:
+        return age_on(date.fromisoformat(f["dob"]), NOW().date())
+    return f["age"]
+
+
+def family_age(c, fid):
+    """Age today, or None for a walk-in demo patient (no family)."""
+    f = c.execute("SELECT age, dob FROM families WHERE id=?", (fid,)).fetchone()
+    return fam_age(f) if f else None
+
+
+def birthday_rules(c, fid):
+    """On the 10th birthday the child gets their own link (patient and caregiver from 10).
+
+    Under 10 the caregiver answered in the patient record. Those answers move to the caregiver's
+    own record (their history stays theirs) and the patient's record starts fresh for the child.
+    """
+    age = family_age(c, fid)
+    if age is None or age < 10:
+        return
+    if c.execute("SELECT 1 FROM invites WHERE family_id=? AND person='patient'", (fid,)).fetchone():
+        return
+    old = json.loads(c.execute("SELECT state FROM patients WHERE id=?", (fid,)).fetchone()["state"])
+    if not c.execute("SELECT 1 FROM caregiver_states WHERE family_id=?", (fid,)).fetchone():
+        c.execute(
+            "INSERT INTO caregiver_states(family_id,state,updated_at) VALUES (?,?,?)",
+            (fid, json.dumps({**old, "role": "caregiver"}), iso()),
+        )
+    fresh = {
+        "patientName": old.get("patientName", ""),
+        "patientLastInitial": old.get("patientLastInitial", ""),
+        "caregiverName": old.get("caregiverName", ""),
+        "role": "self",
+        "lang": old.get("lang", "en"),
+        "barriers": [],
+        "batAnswers": {},
+        "strategies": [],
+        "daily": [],
+        "weekly": [],
+        "contactRequests": 0,
+    }
+    c.execute("UPDATE patients SET state=?, handled_requests=0 WHERE id=?", (json.dumps(fresh), fid))
+    c.execute(
+        "INSERT INTO invites(token,family_id,person,created_at) VALUES (?,?,?,?)",
+        (secrets.token_urlsafe(12), fid, "patient", iso()),
+    )
+    event(c, fid, "birthday", "Patient turned 10: their own personal link was created; the caregiver's earlier answers stay with the caregiver")
+
+
 # Chart risk signals (packet page 4, must-keep #6). Demo settings; the clinical team sets real ones.
 # The packet says "swing more than 2 SD across 4 draws". We read this as the standard deviation
 # of the last 4 tacrolimus levels being above 2. Confirm with the clinical team.
@@ -207,6 +268,9 @@ def init():
         )
         if "lang" not in [r["name"] for r in c.execute("PRAGMA table_info(families)")]:
             c.execute("ALTER TABLE families ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'")
+        # Date of birth (YYYY-MM-DD). Rows made before this column existed keep using the stored age.
+        if "dob" not in [r["name"] for r in c.execute("PRAGMA table_info(families)")]:
+            c.execute("ALTER TABLE families ADD COLUMN dob TEXT")
         c.execute(
             "CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, family_id TEXT NOT NULL, person TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
         )
@@ -314,8 +378,10 @@ def init():
             seed_chart(c)
 
 
-def create_family(c, first, initial, age, lang, caregiver, leads=None):
-    """Enroll a family: one patient record plus a personal link per person. Returns the family id."""
+def create_family(c, first, initial, dob, lang, caregiver, leads=None):
+    """Enroll a family: one patient record plus a personal link per person. Returns the family id.
+    dob is a date; the age at enrolment is also stored (used only if the date of birth is missing)."""
+    age = age_on(dob, NOW().date())
     fid = "fam-" + secrets.token_hex(6)
     state = {
         "patientName": first,
@@ -336,8 +402,8 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
         (fid, json.dumps(state), "", iso(), iso()),
     )
     c.execute(
-        "INSERT INTO families(id,age,leads,caregiver_name,created_at,lang) VALUES (?,?,?,?,?,?)",
-        (fid, age, leads or default_leads(age), caregiver, iso(), lang),
+        "INSERT INTO families(id,age,dob,leads,caregiver_name,created_at,lang) VALUES (?,?,?,?,?,?,?)",
+        (fid, age, dob.isoformat(), leads or default_leads(age), caregiver, iso(), lang),
     )
     for person in (["caregiver"] if age < 10 else ["patient", "caregiver"]):
         c.execute(
@@ -435,8 +501,8 @@ def save_center(c, data):
 
 def owner_person(c, pid):
     """Who answers in the patient record: the caregiver for a child under 10, else the patient."""
-    f = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
-    return "caregiver" if f and f["age"] < 10 else "patient"
+    age = family_age(c, pid)
+    return "caregiver" if age is not None and age < 10 else "patient"
 
 
 def record_bat(c, pid, person, st, backfill=False):
@@ -499,8 +565,8 @@ def recheck_info(c, pid, person):
 def family_rechecks(c, pid):
     """Re-check info for each person who answers for this patient."""
     out = [recheck_info(c, pid, owner_person(c, pid))]
-    f = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
-    if f and f["age"] >= 10:
+    age = family_age(c, pid)
+    if age is not None and age >= 10:
         out.append(recheck_info(c, pid, "caregiver"))
     return [x for x in out if x]
 
@@ -610,10 +676,18 @@ def save_caregiver_state(c, fid, state):
 
 
 def invite_row(c, token):
-    return c.execute(
-        "SELECT i.person, i.family_id, f.age, f.leads, f.caregiver_name, f.lang FROM invites i JOIN families f ON f.id=i.family_id WHERE i.token=?",
+    """Who a personal link belongs to, with the family's age today (the date of birth itself is not included)."""
+    fid = c.execute("SELECT family_id FROM invites WHERE token=?", (token,)).fetchone()
+    if not fid:
+        return None
+    birthday_rules(c, fid["family_id"])
+    r = c.execute(
+        "SELECT i.person, i.family_id, f.age, f.dob, f.leads, f.caregiver_name, f.lang FROM invites i JOIN families f ON f.id=i.family_id WHERE i.token=?",
         (token,),
     ).fetchone()
+    inv = {k: r[k] for k in ("person", "family_id", "leads", "caregiver_name", "lang")}
+    inv["age"] = fam_age(r)
+    return inv
 
 
 def owns_record(inv):
@@ -721,9 +795,14 @@ def seed_answers(first, initial, caregiver, lang, role, a):
     return st
 
 
+def seed_dob(age):
+    """A fictional date of birth that gives this age at seed time (birthday about 100 days ago)."""
+    return add_months(NOW().date(), -12 * age) - timedelta(days=100)
+
+
 def seed_families(c):
     for first, initial, age, lang, cg, leads, pt, cga in SEED_FAMILIES:
-        fid = create_family(c, first, initial, age, lang, cg, leads)
+        fid = create_family(c, first, initial, seed_dob(age), lang, cg, leads)
         if age < 10:
             # The caregiver is the user: their answers are the child's record.
             c.execute("UPDATE patients SET state=? WHERE id=?", (json.dumps(seed_answers(first, initial, cg, lang, "caregiver", cga)), fid))
@@ -745,7 +824,9 @@ def family_info(c, pid):
         "SELECT person, token FROM invites WHERE family_id=? ORDER BY person DESC", (pid,)
     ).fetchall()
     return {
-        "age": f["age"],
+        "age": fam_age(f),
+        # Care team only (patient detail, Family section). Never sent to a family page.
+        "dob": f["dob"],
         "leads": f["leads"],
         "caregiverName": f["caregiver_name"],
         "links": [{"person": l["person"], "token": l["token"]} for l in links],
@@ -925,10 +1006,10 @@ def caregiver_state(c, fid):
 
 def reported_by(c, pid, st, barrier):
     """Who said "yes" to this barrier: Patient, Caregiver or Both."""
-    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
-    if not fam:
+    age = family_age(c, pid)
+    if age is None:
         return "Caregiver" if st.get("role") == "caregiver" else "Patient"
-    if fam["age"] < 10:
+    if age < 10:
         return "Caregiver"  # under 10 the caregiver answers for the child
     cs = caregiver_state(c, pid) or {}
     p = bat_complete(st) and barrier in st.get("barriers", [])
@@ -942,8 +1023,8 @@ def caregiver_only_barriers(c, pid, st):
     The patient has never said Yes to them, now or in an earlier checklist. Their plans,
     check-back questions and dates go to the caregiver and the care team, never to the patient.
     """
-    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
-    if not fam or fam["age"] < 10:
+    age = family_age(c, pid)
+    if age is None or age < 10:
         return set()
     said = set(st.get("barriers", []))
     for r in c.execute("SELECT barriers FROM bat_history WHERE patient_id=? AND person='patient'", (pid,)):
@@ -957,8 +1038,8 @@ def caregiver_only_barriers(c, pid, st):
 
 def answer_compare(c, pid, st):
     """Patient vs caregiver on the 14 BAT items (age 10+), for the care team only."""
-    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
-    if not fam or fam["age"] < 10:
+    age = family_age(c, pid)
+    if age is None or age < 10:
         return None
     cs = caregiver_state(c, pid) or {}
     pa, ca = st.get("batAnswers") or {}, cs.get("batAnswers") or {}
@@ -981,9 +1062,9 @@ def sync_tasks(c, pid, state):
     the existing task for a barrier that is still "yes" instead of adding a second one.
     A barrier that is no longer "yes" loses its task only while it has no plan yet.
     """
-    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    age = family_age(c, pid)
     # Each person who has finished the 14 items counts. For a family: one task per barrier.
-    voices = [v for v in [state, caregiver_state(c, pid) if fam and fam["age"] >= 10 else None] if v and bat_complete(v)]
+    voices = [v for v in [state, caregiver_state(c, pid) if age is not None and age >= 10 else None] if v and bat_complete(v)]
     if not voices:
         return
     # New tasks are labelled with the newest assessment among the voices.
@@ -1487,6 +1568,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def read_patients(self, c, path, m):
         if path == "/api/patients":
+            for f in c.execute("SELECT id FROM families").fetchall():
+                birthday_rules(c, f["id"])
             rows = c.execute("SELECT * FROM patients").fetchall()
             for row in rows:
                 recalc(c, row)
@@ -1610,7 +1693,7 @@ class Handler(SimpleHTTPRequestHandler):
         first = data.get("patientName")
         initial = data.get("patientLastInitial")
         caregiver = data.get("caregiverName")
-        age = data.get("age")
+        raw_dob = data.get("dob")
         lang = data.get("lang")
         leads = data.get("leads") or None
         for v, label in ((first, "patient first name"), (caregiver, "caregiver first name")):
@@ -1618,13 +1701,22 @@ class Handler(SimpleHTTPRequestHandler):
                 return {"error": f"Please enter the {label}"}, 400
         if not isinstance(initial, str) or not re.fullmatch(r"[A-Za-zÀ-ÿ]", initial):
             return {"error": "Last initial must be one letter"}, 400
-        if type(age) != int or not 0 <= age <= 30:
-            return {"error": "Age must be a whole number from 0 to 30"}, 400
+        try:
+            if not isinstance(raw_dob, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw_dob):
+                raise ValueError
+            dob = date.fromisoformat(raw_dob)
+        except ValueError:
+            return {"error": "Please enter the date of birth as a real date"}, 400
+        if dob > NOW().date():
+            return {"error": "The date of birth cannot be in the future"}, 400
+        age = age_on(dob, NOW().date())
+        if not 0 <= age <= MAX_AGE:
+            return {"error": f"This date of birth gives age {age}. Patients must be 0 to {MAX_AGE} years old"}, 400
         if lang not in ("en", "es"):
             return {"error": "Language must be English or Spanish"}, 400
         if leads is not None and leads not in LEADS_NAMES:
             return {"error": "Who leads must be parent, shared or patient"}, 400
-        fid = create_family(c, first.strip(), initial.upper(), age, lang, caregiver.strip(), leads)
+        fid = create_family(c, first.strip(), initial.upper(), dob, lang, caregiver.strip(), leads)
         return {"id": fid, "family": family_info(c, fid)}, 200
 
     def task_action(self, c, task_id, action, data):
