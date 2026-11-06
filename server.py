@@ -264,6 +264,10 @@ def init():
         )
         c.execute("UPDATE tasks SET status='needs_plan' WHERE status='open'")
         # home_role: the packet owner for the barrier; owner_role: who handles it at this center.
+        # Team review (from the DEAP paper): 3 plans for the same barrier that ended "Not working".
+        # review_base = how many "Not working" plans were already reviewed (or followed by "Working").
+        if "review_base" not in [r["name"] for r in c.execute("PRAGMA table_info(tasks)")]:
+            c.execute("ALTER TABLE tasks ADD COLUMN review_base INTEGER NOT NULL DEFAULT 0")
         if "home_role" not in [r["name"] for r in c.execute("PRAGMA table_info(tasks)")]:
             c.execute("ALTER TABLE tasks ADD COLUMN home_role TEXT")
         for r in c.execute("SELECT id, barrier FROM tasks WHERE home_role IS NULL").fetchall():
@@ -1249,6 +1253,23 @@ def log_checkbacks(c, pid, old, new, who="Patient"):
         )
 
 
+# Plans that ended "Not working" before a barrier needs a physician review (DEAP paper).
+REVIEW_AFTER = 3
+REVIEW_ROLE = "Nephrologist / NP / Pharmacist"
+
+
+def failed_plans(c, task_id):
+    """How many plans for this task ended as "Not working" (from the plan history)."""
+    return c.execute(
+        "SELECT COUNT(*) FROM plans WHERE task_id=? AND closed_at IS NOT NULL AND outcome='not_working'", (task_id,)
+    ).fetchone()[0]
+
+
+def review_count(c, t):
+    """Failed plans since the last team review; REVIEW_AFTER or more means "Needs team review"."""
+    return failed_plans(c, t["id"]) - (t["review_base"] or 0)
+
+
 def plan_view(p):
     return {
         "id": p["id"],
@@ -1301,6 +1322,9 @@ def task_view(c, t, st):
         "caregiverSees": caregiver_sees_plans(c, t["patient_id"], st),
         "plan": plan_view(current) if current else None,
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
+        # Tried REVIEW_AFTER plans that did not work: physician review (shown to REVIEW_ROLE too).
+        "failedSinceReview": review_count(c, t),
+        "needsReview": review_count(c, t) >= REVIEW_AFTER,
         # The patient's latest check-back answer for this task, exactly as they wrote it.
         "patientAnswer": (st.get("checkbacks") or {}).get(str(t["id"])),
         # The caregiver's own check-back answer (patient 10+, when they are asked), exactly as written.
@@ -1386,6 +1410,13 @@ def derive(row, c, chart=False, for_patient=False):
             continue
         money_open = True
         reasons.append(f"{BARRIER_NAMES[t['barrier']]}. {t['owner_role']} to follow up.")
+    # Tried 3 plans that did not work: physician review. Does not change the colour by itself.
+    for t in c.execute(
+        "SELECT * FROM tasks WHERE patient_id=? AND status IN ('needs_plan','plan_agreed','keep_checking') ORDER BY id", (pid,)
+    ).fetchall():
+        n = review_count(c, t)
+        if n >= REVIEW_AFTER and t["barrier"] not in hidden:
+            reasons.append(f"Tried {n} plans for {BARRIER_NAMES.get(t['barrier'], t['barrier'])}. Physician review needed.")
     if state.get("silence"):
         reasons.append("Demo silence flag")
     if stage in ("caregiver_notice", "clinician_review"):
@@ -1821,7 +1852,7 @@ class Handler(SimpleHTTPRequestHandler):
                         recalc(c, row)
                     reply = ({"family": family_info(c, fm.group(1))}, 200)
             return self.json(*reply)
-        tm = re.fullmatch(r"/api/tasks/(\d+)/(plan|outcome)", path)
+        tm = re.fullmatch(r"/api/tasks/(\d+)/(plan|outcome|reviewed)", path)
         if tm and isinstance(data, dict):
             with LOCK, db() as c:
                 reply = self.task_action(c, int(tm.group(1)), tm.group(2), data)
@@ -1876,7 +1907,14 @@ class Handler(SimpleHTTPRequestHandler):
         # Audit times use real time; due dates count from the patient's (demo) clock.
         now = NOW()
         clock_now = now + timedelta(days=clock_days(c, pid))
-        if action == "plan":
+        if action == "reviewed":
+            # The team reviewed a barrier with 3 plans that did not work.
+            n = failed_plans(c, task_id)
+            if n - (t["review_base"] or 0) < REVIEW_AFTER:
+                return {"error": "This barrier does not need a team review"}, 409
+            c.execute("UPDATE tasks SET review_base=? WHERE id=?", (n, task_id))
+            event(c, pid, "team_review", f"Team review done for '{t['barrier']}' after {n - (t['review_base'] or 0)} plans that did not work ({by})")
+        elif action == "plan":
             # One plan per barrier: a new plan only when the task has none.
             if t["status"] != "needs_plan":
                 return {"error": "This barrier already has a plan"}, 409
@@ -1920,6 +1958,8 @@ class Handler(SimpleHTTPRequestHandler):
                     "UPDATE tasks SET status='keep_checking', due_date=? WHERE id=?",
                     (iso(due), task_id),
                 )
+                # A plan that works also clears a "Needs team review".
+                c.execute("UPDATE tasks SET review_base=? WHERE id=?", (failed_plans(c, task_id), task_id))
                 event(c, pid, "outcome", f"'{b}': Working - keep checking; next check-back {due.date().isoformat()} ({by})")
             elif outcome == "not_working":
                 # Close the plan (kept in history); the barrier needs a new plan.
