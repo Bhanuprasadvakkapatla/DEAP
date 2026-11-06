@@ -59,6 +59,24 @@ BARRIER_OWNERS = {
     "other": "Transplant coordinator",  # to review and re-route
 }
 OWNER_ROLES = list(dict.fromkeys(BARRIER_OWNERS.values()))
+# Barrier wording as the app shows it (BAT wording, same as patient.html), for server-written reasons.
+BARRIER_NAMES = {
+    "forget": "Forgetting to take them or bring them with you",
+    "taste": "Hate the taste",
+    "swallow": "Hard to swallow pills",
+    "side": "Side effects (e.g., nausea, constipation)",
+    "embarrass": "I don't want others to know I take medicine",
+    "noneed": "I don't need the medicine",
+    "toomany": "Too many medicines or too many times a day",
+    "notwork": "The medicine does not work",
+    "confusing": "Difficult to understand medication instructions",
+    "ranout": "Ran out of medicine",
+    "afford": "Can't afford the medicine",
+    "activities": "Gets in the way of other activities",
+    "refuse": "Refuse to take them",
+    "inconvenient": "Inconvenient",
+    "other": "Something else",
+}
 # Center setup (packet judge question 5; page 5: the owner mapping is site specific). A role that is
 # not on staff sends its tasks to another role on staff, or to an outside partner.
 OUTSIDE_PARTNER = "Outside partner (e.g., regional telehealth)"
@@ -470,7 +488,38 @@ def reports(c):
         "levels": {"steady": steady, "unsteady": unsteady, "noData": no_data, "threshold": TAC_SD},
         "ownerWork": owners,
         "reported": reported,
+        "moreContact": more_contact(c),
     }
+
+
+def more_contact(c, limit=8):
+    """Who may need more contact between visits: patients with 2 or more of the flags the app
+    already shows, most flags first. A count of existing flags, not a prediction."""
+    out = []
+    for row in c.execute("SELECT * FROM patients").fetchall():
+        pid, st = row["id"], json.loads(row["state"])
+        chips = []
+        er = c.execute("SELECT stage FROM escalation WHERE patient_id=?", (pid,)).fetchone()
+        if er and er["stage"] == "clinician_review":
+            chips.append(f"No response in {CLINICIAN_HOURS / 24:g}+ days")
+        w = (weekly_answers(c, pid, st) or [None])[-1]
+        if w and w.get("status") in ("yellow", "red"):
+            chips.append("Weekly " + w["status"])
+        for f in chart_signals(c, pid)["flags"]:
+            chips.append("Levels unsteady" if f["kind"] == "unsteady" else f["text"])
+        open_money = [
+            r["barrier"]
+            for r in c.execute(
+                "SELECT barrier FROM tasks WHERE patient_id=? AND barrier IN ('ranout','afford') AND status='needs_plan' ORDER BY barrier DESC",
+                (pid,),
+            )
+        ]
+        if open_money:
+            chips.append(" / ".join(BARRIER_NAMES[b] for b in open_money) + ": no plan yet")
+        if len(chips) >= 2:
+            out.append({"id": pid, "name": st.get("patientName", ""), "initial": st.get("patientLastInitial", ""), "reasons": chips})
+    out.sort(key=lambda x: (-len(x["reasons"]), x["name"]))
+    return out[:limit]
 
 
 def save_center(c, data):
