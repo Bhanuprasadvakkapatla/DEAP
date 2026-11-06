@@ -85,7 +85,7 @@ The clinician enrolls a family (**Enroll family**) with the patient's date of bi
 - Plans for barriers only the caregiver reported (the patient has never said Yes to them) are shown to the caregiver under "Plans for you", not to the patient. The patient's link never receives their plan text, barrier name or check-back date. If both said Yes, the patient sees the plan as usual. The care team sees these plans marked "Visible to caregiver only", and the caregiver is always asked "Is your plan working?" about them (the patient cannot be).
 - The server enforces these rules: each link's page only receives what that person may see, and family records cannot be read through the open patient endpoint.
 
-**Hand-off of responsibility.** "Who leads" (set at enrollment, changeable in patient detail; every change is logged) decides who gets reminders and "Is your plan working?" check-backs: Parent leads → caregiver; Shared → both; Patient leads → patient only. A caregiver is only asked about plans the patient shares with them. Under 10 the caregiver always gets them. For Patient leads the 24-hour caregiver-notice stage is skipped (clinician review only).
+**Hand-off of responsibility.** "Who leads" (set at enrollment, changeable in patient detail; every change is logged) decides who gets reminders and "Is your plan working?" check-backs: Parent leads → caregiver; Shared → both; Patient leads → patient only. A caregiver is only asked about plans the patient shares with them. Under 10 the caregiver always gets them. For Patient leads the 7-day caregiver-notice stage is skipped (clinician review only).
 
 New Spanish text for families (who sees what, sharing, hand-off, the Progress tab, the small headings above screens) is a draft translation for the clinical team to review.
 
@@ -142,16 +142,17 @@ No authentication, authorization, transport security, auditing, HIPAA compliance
 
 This is a **simulation of non-response**, not an unconsciousness detector, missed-dose detector, or emergency monitoring system. The system does not know whether medication was taken. An unconscious/unresponsive person needs emergency services (911 in the US), not a response from this application.
 
-- **24 hours** after last recorded check-in activity: a *simulated* caregiver notification appears in the clinician record. **No SMS or push is sent.**
-- **48 hours**: the patient is flagged for clinician review in the attention queue. **No external clinician alert is sent.**
+- **7 days (placeholder)** after last recorded check-in activity: a *simulated* caregiver notification appears in the clinician record, only for a caregiver the patient shares something with (or under 10). **No SMS or push is sent.**
+- **14 days** (from the clinic team: they reach out after about 2 weeks of silence): the patient is flagged for clinician review in the attention queue. **No external clinician alert is sent.**
+- Settings: `DEAP_CAREGIVER_HOURS` (default 168) and `DEAP_CLINICIAN_HOURS` (default 336); the caregiver value must be below the clinician value. This is separate from the 14-day check-back clock for plans, which is unchanged.
 - Clinicians can **acknowledge** the flag, **mark it resolved**, and review a basic **event history**.
 - Patient check-in activity resets the non-response stage. A passive page visit does not count as a check-in.
-- Demo controls in clinician patient details: **Simulate 25h**, **Simulate 49h**, **Reset timer**. Demo offsets do not change actual system time.
+- Demo controls in clinician patient details: **Simulate 8 days**, **Simulate 15 days**, **Reset timer** (in Demo tools). Demo offsets do not change actual system time.
 - These durations are **illustrative hackathon values**, not approved medical escalation rules. The clinical team must determine thresholds, consent, authorized caregiver access, escalation ownership, alert delivery, and escalation response time before any real implementation.
 
 ### New API endpoints
 
-- `POST /api/patients/{id}/simulate` with `{"hours":0|25|49}`
+- `POST /api/patients/{id}/simulate` with `{"hours":0|192|360}`
 - `POST /api/patients/{id}/escalation` with `{"action":"acknowledge"|"resolve"}`
 - `GET /api/patients/{id}/escalation` returns demo audit events
 

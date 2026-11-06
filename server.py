@@ -12,8 +12,10 @@ DB = Path(os.environ.get("DEAP_DB", str(ROOT / "deap_demo.sqlite3")))
 # 127.0.0.1 = this computer only. 0.0.0.0 = also phones on the same network.
 HOST = os.environ.get("DEAP_HOST", "127.0.0.1")
 PORT = 8000
-CAREGIVER_HOURS = float(os.environ.get("DEAP_CAREGIVER_HOURS", "24"))
-CLINICIAN_HOURS = float(os.environ.get("DEAP_CLINICIAN_HOURS", "48"))
+# Silence safety net: 7 days caregiver notice (placeholder), 14 days clinician review (from the
+# clinic team: they reach out after about 2 weeks of silence). Not the 14-day plan check-back clock.
+CAREGIVER_HOURS = float(os.environ.get("DEAP_CAREGIVER_HOURS", "168"))
+CLINICIAN_HOURS = float(os.environ.get("DEAP_CLINICIAN_HOURS", "336"))
 if not 0 < CAREGIVER_HOURS < CLINICIAN_HOURS:
     raise ValueError("Escalation thresholds must increase and be positive")
 LOCK = threading.RLock()
@@ -1437,7 +1439,9 @@ def derive(row, c, chart=False, for_patient=False):
 
 
 def recalc(c, row):
-    """Demo-only thresholds: 24h caregiver notice, 48h clinician review. NOT medical guidance."""
+    """Silence thresholds: 7 days caregiver notice (placeholder), 14 days clinician review (from the
+    clinic team: they reach out after about 2 weeks of silence). NOT medical guidance.
+    An overdue stage can raise a status but never lower it (see derive)."""
     pid = row["id"]
     state = json.loads(row["state"])
     last = datetime.fromisoformat(row["last_engagement"].replace("Z", "+00:00"))
@@ -1914,8 +1918,9 @@ class Handler(SimpleHTTPRequestHandler):
             event(c, pid, "care_plan", "Clinician updated follow-up note")
         elif action == "simulate":
             hours = data.get("hours")
-            if type(hours) != int or hours not in (0, 25, 49):
-                return {"error": "Demo hours must be 0, 25, or 49"}, 400
+            # Demo buttons: 8 days and 15 days, just past the 7-day and 14-day thresholds.
+            if type(hours) != int or hours not in (0, 192, 360):
+                return {"error": "Demo hours must be 0, 192 (8 days) or 360 (15 days)"}, 400
             c.execute(
                 "UPDATE escalation SET stage='none',acknowledged=0 WHERE patient_id=? AND stage='resolved'",
                 (pid,),
