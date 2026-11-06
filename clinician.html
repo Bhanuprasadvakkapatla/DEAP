@@ -437,6 +437,83 @@
       font-size: 13px
     }
 
+    /* Patient detail: collapsible sections, most important first. */
+    .reasonline {
+      margin: 4px 0 8px;
+      font-weight: 650;
+      color: #2d4a60
+    }
+
+    .summaryline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      align-items: center;
+      margin: 0 0 16px
+    }
+
+    details.sec {
+      background: #fff;
+      border: 1px solid #e2eaf0;
+      border-radius: 17px;
+      box-shadow: 0 6px 28px #17334a08;
+      margin: 16px 0
+    }
+
+    details.sec>summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 18px 23px;
+      cursor: pointer;
+      list-style: none
+    }
+
+    details.sec>summary::-webkit-details-marker {
+      display: none
+    }
+
+    details.sec>summary::before {
+      content: '▸';
+      color: #117e71;
+      font-size: 15px;
+      transition: transform .15s
+    }
+
+    details.sec[open]>summary::before {
+      transform: rotate(90deg)
+    }
+
+    details.sec>summary h2 {
+      margin: 0;
+      font-size: 19px
+    }
+
+    details.sec>.secbody {
+      padding: 0 23px 23px
+    }
+
+    details.sec.demo {
+      border-style: dashed;
+      background: #fbfcfd
+    }
+
+    .subhead {
+      font-size: 15px;
+      margin: 18px 0 8px
+    }
+
+    @media(max-width:520px) {
+      details.sec>summary {
+        padding: 14px 15px
+      }
+
+      details.sec>.secbody {
+        padding: 0 15px 15px
+      }
+    }
+
     .taskgroup {
       margin-top: 18px
     }
@@ -603,7 +680,8 @@
 
     @media(max-width:900px) {
       .layout {
-        grid-template-columns: 1fr
+        /* minmax(0, ...) lets wide tables scroll inside their box instead of widening the page */
+        grid-template-columns: minmax(0, 1fr)
       }
 
       .side {
@@ -846,6 +924,12 @@
     // Plan-history lists the user opened, kept open across the 4-second refresh.
     const openHistory = new Set();
     document.addEventListener('toggle', e => {
+      // Patient detail sections: remember open or closed.
+      const sec = e.target.dataset?.sec;
+      if (sec) {
+        secOpen[sec] = e.target.open;
+        return
+      }
       const id = Number(e.target.dataset?.hist);
       if (!id) return;
       e.target.open ? openHistory.add(id) : openHistory.delete(id)
@@ -899,16 +983,23 @@
           `<div class="meta thenvsnow">Then vs now — added: ${r.added.length?r.added.map(k=>esc(names[k]||k)).join(', '):'none'} · resolved: ${r.resolved.length?r.resolved.map(k=>esc(names[k]||k)).join(', '):'none'}</div>`;
         return `<div class="recheck" data-person="${r.person}"><strong style="display:inline">${personLabel(p,r.person)}</strong>: last checklist ${esc(shortDate(r.lastDone))} · next due ${esc(shortDate(r.nextDue+'T12:00:00'))}${r.due?' <span class="pill">Due now</span>':''}${tv}</div>`
       }).join('');
-      return `<div class="item" id="recheckItem"><small>Checklist (every 6 months, or sooner if something changes)</small>${rows||'<p class="muted">No completed checklist yet.</p>'}${rs.length?`<div class="democlock" style="margin-top:8px"><button class="button small secondary" id="makeRecheckDue">Demo: make 6-month re-check due</button><span class="muted">Demo only. Real time is not changed.</span><span id="recheckMsg" class="muted" role="status"></span></div>`:''}</div>`
+      // The "make re-check due" demo button lives in Demo tools.
+      return `<div class="item" id="recheckItem"><small>Checklist (every 6 months, or sooner if something changes)</small>${rows||'<p class="muted">No completed checklist yet.</p>'}</div>`
     }
 
     const MISMATCH = "Check-in and chart don't match — worth reviewing together.";
     // Chart signals for the care team (demo data, no real EHR). No target range; never high/low.
-    function chartPanel(p) {
+    // The demo forms that add chart data live in Demo tools.
+    function chartBody(p) {
       const ch = p.chart;
-      if (!ch) return '';
       const levels = ch.recentLevels.length ? `<table class="levels"><thead><tr><th>Draw date</th><th>Tacrolimus (ng/mL)</th></tr></thead><tbody>${ch.recentLevels.map(x=>`<tr><td>${esc(shortDate(x.date+'T12:00:00'))}</td><td>${esc(x.level)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No lab draws on record.</p>';
-      return `<div class="panel full" id="chartPanel"><h2>Chart signals <span class="pill">Demo — no real EHR</span></h2>${ch.hasData?`<div class="detail"><div><small class="muted">Last ${ch.recentLevels.length} level${ch.recentLevels.length===1?'':'s'}</small>${levels}<p class="muted" id="chartSpread">Spread (standard deviation) of last 4: ${ch.spread===null?'needs 4 draws':esc(ch.spread.toFixed(1))}</p></div><div class="list"><div class="item"><small>Last clinic visit</small><strong>${esc(ch.lastVisit?shortDate(ch.lastVisit+'T12:00:00'):'None on record')}</strong></div><div class="item"><small>Last lab</small><strong>${esc(ch.lastLab?shortDate(ch.lastLab+'T12:00:00'):'None on record')}</strong></div></div></div>`:'<p class="muted">No chart data for this patient.</p>'}<div class="list" id="chartFlags" style="margin-top:12px">${ch.flags.length?ch.flags.map(f=>`<div class="item chartflag">${esc(f.text)}</div>`).join(''):'<p class="muted">No chart flags.</p>'}</div>${p.chartMismatch?`<p class="mismatch" id="chartMismatch">${MISMATCH}</p>`:''}${ch.flags.length?'<p class="muted">For review at the weekly team meeting.</p>':''}<div class="democlock" id="labForm"><strong>Demo: add a lab result</strong><span class="pill">Demo — no real EHR</span><label class="muted" for="labDate">Date</label><input type="date" id="labDate" value="${new Date().toLocaleDateString('en-CA')}"><label class="muted" for="labLevel">Tacrolimus (ng/mL)</label><input type="number" id="labLevel" step="0.1" min="0" style="width:110px"><button class="button small secondary" id="addLab">Add lab result</button><span id="labResult" class="muted" role="status"></span></div></div>`
+      return `<div id="chartPanel"><div class="list" id="chartFlags">${ch.flags.length?ch.flags.map(f=>`<div class="item chartflag">${esc(f.text)}</div>`).join(''):'<p class="muted">No chart flags.</p>'}</div>${p.chartMismatch?`<p class="mismatch" id="chartMismatch">${MISMATCH}</p>`:''}${ch.flags.length?'<p class="muted">For review at the weekly team meeting.</p>':''}${ch.hasData?`<div class="detail" style="margin-top:12px"><div><small class="muted">Last ${ch.recentLevels.length} level${ch.recentLevels.length===1?'':'s'}</small>${levels}<p class="muted" id="chartSpread">Spread (standard deviation) of last 4: ${ch.spread===null?'needs 4 draws':esc(ch.spread.toFixed(1))}</p></div><div class="list"><div class="item"><small>Last clinic visit</small><strong id="lastVisit">${esc(ch.lastVisit?shortDate(ch.lastVisit+'T12:00:00'):'None on record')}</strong></div><div class="item"><small>Last lab</small><strong>${esc(ch.lastLab?shortDate(ch.lastLab+'T12:00:00'):'None on record')}</strong></div></div></div>`:'<p class="muted">No chart data for this patient.</p>'}</div>`
+    }
+
+    // Demo only (no real EHR): add a fictional lab result or last clinic visit so a chart flag can appear live.
+    function chartDemoForms() {
+      const today = new Date().toLocaleDateString('en-CA');
+      return `<div class="democlock" id="labForm"><strong>Add a lab result</strong><span class="pill">Demo, no real EHR</span><label class="muted" for="labDate">Date</label><input type="date" id="labDate" value="${today}"><label class="muted" for="labLevel">Tacrolimus (ng/mL)</label><input type="number" id="labLevel" step="0.1" min="0" style="width:110px"><button class="button small secondary" id="addLab">Add lab result</button><span id="labResult" class="muted" role="status"></span></div><div class="democlock" id="visitForm"><strong>Add last clinic visit date</strong><span class="pill">Demo, no real EHR</span><label class="muted" for="visitDate">Date</label><input type="date" id="visitDate" max="${today}"><button class="button small secondary" id="addVisit">Save visit date</button><span id="visitResult" class="muted" role="status"></span><span class="muted" style="flex-basis:100%">An old visit date shows the “No clinic visit” chart flag; a recent one clears it.</span></div>`
     }
 
     function planSummary(pl, cgOnly) {
@@ -954,11 +1045,75 @@
           b) => (a.status === 'red' ? -1 : 1) - (b.status === 'red' ? -1 : 1)) : filtered)
     }
 
+    // Patient detail sections are <details>. Open or closed is remembered across the 4-second refresh.
+    const secOpen = {};
+    const section = (key, title, body, openByDefault, extra = '') =>
+      `<details class="sec${key==='demo'?' demo':''}" id="sec-${key}" data-sec="${key}" ${(secOpen[key] ?? openByDefault)?'open':''}><summary><h2>${title}</h2>${extra}</summary><div class="secbody">${body}</div></details>`;
+    // Barrier answers: only items where either person said Yes, unless "Show all 14 items" is on.
+    let showAllAnswers = false,
+      // Last activity log shown, so the 4-second refresh does not flash "Loading…".
+      escCache = {
+        pid: null,
+        html: ''
+      };
+    // DEAP engagement safety net: synthetic escalation, not an emergency or missed-dose detector.
+    const escalationLabels = {
+      none: 'No overdue alert',
+      resolved: 'Follow-up resolved',
+      caregiver_notice: 'Caregiver notice simulated',
+      clinician_review: 'Clinician review needed'
+    };
+
+    // Patient detail, most important first. Nothing here is clinical advice; all data is fictional.
     function detail(p) {
       const w = p.weekly || [],
         last = w.at(-1),
-        daily = p.daily || [];
-      return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div>${recheckItem(p)}<div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong>${last?.via==='text'?'<span class="meta" id="lastViaText"> via text reply</span>':''}<div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div>${familyPanel(p)}${chartPanel(p)}<div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Demo only. Moves this patient's check-back clock so check-backs come due; real time is not changed.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}${x.via==='text'?' · via text reply':''}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
+        daily = p.daily || [],
+        e = p.escalation || {
+          stage: 'none',
+          acknowledged: false
+        };
+      const mine = tasks.filter(t => t.patientId === p.id).sort((a, b) => b.isPrimary - a.isPrimary);
+      const reasons = p.attentionReasons || [];
+      // a. Header: name, status, and the same reason text as the queue.
+      const head = `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:6px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><p class="reasonline" id="statusReason">${reasons.length?esc(reasons.join(' · ')):'Nothing needs follow-up right now.'}</p>`;
+      // b. Summary counts; each one scrolls to its section.
+      const n = (k, one, many) => k === 1 ? one : many;
+      const needPlan = mine.filter(t => t.status === 'needs_plan').length,
+        dueBack = mine.filter(t => ['overdue', 'today'].includes(taskGroup(t))).length,
+        flags = p.chart?.flags?.length || 0,
+        differ = p.answers?.differ?.length || 0,
+        open = p.openRequests || 0;
+      const items = [
+        needPlan && ['plans', `${needPlan} barrier${n(needPlan,' needs','s need')} a plan`],
+        dueBack && ['plans', `${dueBack} check-back${n(dueBack,' is','s are')} due`],
+        open && ['weekly', `${open} support request${n(open,'','s')} open`],
+        flags && ['chart', `${flags} chart flag${n(flags,'','s')}`],
+        differ && ['answers', `Answers differ on ${differ} item${n(differ,'','s')}`],
+        (p.rechecks || []).some(r => r.due) && ['checklist', 'Checklist re-check due'],
+        ['caregiver_notice', 'clinician_review'].includes(e.stage) && ['escalation', 'Overdue check-in alert']
+      ].filter(Boolean);
+      const summary = `<p class="summaryline" id="detailSummary">${items.length?items.map(([k,txt])=>`<button class="link" data-jump="${k}">${esc(txt)}</button>`).join('<span class="muted"> · </span>'):'<span class="muted">Nothing needs action right now.</span>'}</p>`;
+      // c. The patient's own words, exactly as written.
+      const words = ownWords(p) ? `<div class="panel" id="ownWordsPanel"><h2>In the patient's own words</h2><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>` : '';
+      // d. Plans.
+      const plans = section('plans', 'Plan for each barrier', `<p class="muted">One concrete plan per barrier, made with the patient.${p.clockOffsetDays?` Demo clock is +${esc(p.clockOffsetDays)} days (see Demo tools).`:''}</p><div class="list" id="patientTasks">${mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'}</div>`, true);
+      // e. Chart signals (the demo forms are in Demo tools).
+      const chart = p.chart ? section('chart', 'Chart signals', chartBody(p), true, '<span class="pill">Demo — no real EHR</span>') : '';
+      // f. Checklist and 6-month re-check, with the assessment summary.
+      const checklist = section('checklist', 'Checklist and 6-month re-check', `<div class="list">${recheckItem(p)}<div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div>`, true);
+      // g. Patient and caregiver answers (age 10+).
+      const answers = p.answers ? section('answers', 'Barrier answers, side by side', answersTable(p), true) : '';
+      // h. Follow-up note shown on the patient's Today screen.
+      const note = section('note', 'Care-team follow-up note', `<p class="muted" style="margin-top:0">The patient will see this message on their Today screen.</p><p class="muted">Demo note. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div>`, true);
+      // i. Weekly check-ins and engagement.
+      const weekly = section('weekly', 'Recent weekly check-ins', `<div class="list"><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong>${last?.via==='text'?'<span class="meta" id="lastViaText"> via text reply</span>':''}<div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${open} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${open?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div><h3 class="subhead">Last 8 weekly answers</h3><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}${x.via==='text'?' · via text reply':''}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div>`, true);
+      // j-m. Collapsed by default.
+      const family = p.family ? section('family', 'Family and who sees what', familyBody(p), false) : '';
+      const escalation = section('escalation', 'Overdue check-in and escalation', `<p class="muted" style="margin-top:0">Engagement safety net only. An overdue response does not confirm a missed dose, unconsciousness, or an emergency. These are simulated notices, not real messages.</p><div class="list"><div class="item"><small>Current non-response stage</small><strong id="escStage">${esc(escalationLabels[e.stage]||e.stage)}</strong></div><div class="item"><small>Last recorded patient engagement · ${Math.floor(p.elapsedHours||0)}h elapsed (includes demo offset)</small><strong>${esc(p.lastEngagement?new Date(p.lastEngagement).toLocaleString():'—')}</strong></div><div class="item"><small>Clinician acknowledgment</small><strong>${e.acknowledged?'Acknowledged':'Not acknowledged'}</strong></div></div><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="button" data-esc="acknowledge" ${['none','resolved'].includes(e.stage)||e.acknowledged?'disabled':''}>Acknowledge alert</button><button class="button secondary" data-esc="resolve" ${['none','resolved'].includes(e.stage)?'disabled':''}>Mark follow-up resolved</button></div><p id="escResult" class="muted" role="status"></p><p class="muted">If a caregiver finds a patient unconscious or unresponsive, call 911 immediately. Do not wait for this app.</p>`, false);
+      const log = section('log', 'Activity log (demo events)', `<div id="escHistory" class="list">${escCache.pid===p.id?escCache.html:'<span class="muted">Loading…</span>'}</div>`, false);
+      const demo = section('demo', 'Demo tools (not part of a real clinic)', `<p class="alert" style="margin-top:0">Demo only. These tools change fictional demo data or this patient's demo clock so the hackathon demo can show things happening. A real clinic would not have them. Real time is never changed.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Moves this patient's check-back clock so check-backs come due.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="democlock">${(p.rechecks||[]).length?'<button class="button small secondary" id="makeRecheckDue">Demo: make 6-month re-check due</button>':'<span class="muted">Demo: make 6-month re-check due (available after a completed checklist).</span>'}<span id="recheckMsg" class="muted" role="status"></span></div>${p.chart?chartDemoForms():''}<div class="democlock"><strong>Overdue check-in timer</strong><span class="muted">Simulate time without engagement (fictional data only):</span><button class="button small secondary" data-sim="25">Simulate 25h</button><button class="button small secondary" data-sim="49">Simulate 49h</button><button class="button small secondary" data-sim="0">Reset timer</button><span id="simResult" class="muted" role="status"></span></div>`, false);
+      return head + summary + words + plans + chart + checklist + answers + note + weekly + family + escalation + log + demo
     }
 
     // Measures that show whether the loop works (packet page 6), computed on the server.
@@ -1112,7 +1267,11 @@
       if (!a) return '';
       const cg = esc(p.family.caregiverName);
       const waiting = !a.patientDone || !a.caregiverDone ? `<p class="muted">Waiting for ${[!a.patientDone?esc(p.patientName):'',!a.caregiverDone?cg:''].filter(Boolean).join(' and ')} to answer all 14 items.</p>` : '';
-      return `<div class="item"><small>Barrier answers, side by side</small>${a.differ.length?`<p class="mismatch" id="differNote">${differText(a.differ.length)}</p>`:''}${waiting}<table class="answers" id="answersTable"><thead><tr><th>Item</th><th>Patient</th><th>Caregiver (${cg})</th></tr></thead><tbody>${Object.keys(a.patient).map(k=>`<tr class="${a.differ.includes(k)?'differ':''}" data-item="${k}"><td>${esc(names[k]||k)}${a.differ.includes(k)?' <span class="pill">Differs</span>':''}</td><td>${yn(a.patient[k])}</td><td>${yn(a.caregiver[k])}</td></tr>`).join('')}</tbody></table>${a.caregiverWords&&a.caregiverWords.trim()?`<small>In the caregiver's own words</small><div class="ownwords">${esc(a.caregiverWords)}</div>`:''}</div>`
+      // By default only the items where either person said Yes (every difference is one of these).
+      const keys = Object.keys(a.patient).filter(k => showAllAnswers || a.patient[k] === 'yes' || a.caregiver[k] === 'yes');
+      const shownNote = showAllAnswers ? 'Showing all 14 items.' : 'Showing only items where either person said Yes.';
+      const table = keys.length ? `<div class="scroll"><table class="answers" id="answersTable"><thead><tr><th>Item</th><th>Patient</th><th>Caregiver (${cg})</th></tr></thead><tbody>${keys.map(k=>`<tr class="${a.differ.includes(k)?'differ':''}" data-item="${k}"><td>${esc(names[k]||k)}${a.differ.includes(k)?' <span class="pill">Differs</span>':''}</td><td>${yn(a.patient[k])}</td><td>${yn(a.caregiver[k])}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" id="answersTable">Neither person said Yes to any of the 14 items.</p>';
+      return `<div class="item">${a.differ.length?`<p class="mismatch" id="differNote" style="margin-top:0">${differText(a.differ.length)}</p>`:''}${waiting}<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="muted">${shownNote}</span><button class="button small secondary" id="toggleAnswers">${showAllAnswers?'Show only Yes answers':'Show all 14 items'}</button></div>${table}${a.caregiverWords&&a.caregiverWords.trim()?`<small>In the caregiver's own words</small><div class="ownwords">${esc(a.caregiverWords)}</div>`:''}</div>`
     }
 
     // Same "Who sees what" rules the family sees in Settings (proposed demo rules).
@@ -1132,10 +1291,11 @@
       return `<div class="item" id="whoSeesSummary"><small>Who sees what</small><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul><div class="meta">Proposed privacy rules for the demo; the clinical team decides the real rules.</div></div>`
     }
 
-    function familyPanel(p) {
+    // Family details for the detail page: who leads, who sees what, personal links.
+    // (The side-by-side answers have their own section.)
+    function familyBody(p) {
       const f = p.family;
-      if (!f) return '';
-      return `<div class="panel full" id="familyPanel"><h2>Family</h2><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong><div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><label class="muted" for="leadsSelect">Change who leads</label><select id="leadsSelect">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}" ${f.leads===k?'selected':''}>${v}</option>`).join('')}</select><span id="leadsMsg" class="muted" role="status"></span></div><div class="meta">${f.leads==='parent'?`Reminders and check-backs go to ${esc(f.caregiverName)}.`:f.leads==='shared'?`Reminders and check-backs go to ${esc(p.patientName)} and ${esc(f.caregiverName)}.`:`Reminders and check-backs go to ${esc(p.patientName)} only; no caregiver notice stage.`}</div></div>${whoSeesSummary(p)}${answersTable(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
+      return `<div id="familyPanel"><div class="list"><div class="item"><small>Patient age · Who leads</small><strong>${esc(f.age)} · <span id="leadsNow">${esc(leadsNames[f.leads]||f.leads)}</span></strong><div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><label class="muted" for="leadsSelect">Change who leads</label><select id="leadsSelect">${Object.entries(leadsNames).map(([k,v])=>`<option value="${k}" ${f.leads===k?'selected':''}>${v}</option>`).join('')}</select><span id="leadsMsg" class="muted" role="status"></span></div><div class="meta">${f.leads==='parent'?`Reminders and check-backs go to ${esc(f.caregiverName)}.`:f.leads==='shared'?`Reminders and check-backs go to ${esc(p.patientName)} and ${esc(f.caregiverName)}.`:`Reminders and check-backs go to ${esc(p.patientName)} only; no caregiver notice stage.`}</div></div>${whoSeesSummary(p)}<div class="item"><small>Personal links</small>${linkList(f, (p.patientName||'')+(p.patientLastInitial?' '+p.patientLastInitial+'.':''))}</div></div></div>`
     }
 
     // Who handles a packet role's work at this center (itself, or where it is routed).
@@ -1271,6 +1431,53 @@
         } catch (err) {
           b.disabled = false;
           el('centerMsg').textContent = 'Could not save: ' + err.message
+        }
+        return
+      }
+      // Summary line on patient detail: open that section and scroll to it.
+      const jump = e.target.closest('[data-jump]');
+      if (jump) {
+        const d = el('sec-' + jump.dataset.jump);
+        if (d) {
+          d.open = true;
+          secOpen[jump.dataset.jump] = true;
+          d.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          })
+        }
+        return
+      }
+      if (e.target.id === 'toggleAnswers') {
+        showAllAnswers = !showAllAnswers;
+        render();
+        return
+      }
+      if (e.target.id === 'addVisit' && selected) {
+        const b = e.target;
+        const date = el('visitDate').value;
+        if (!date) {
+          el('visitResult').textContent = 'Please enter a date.';
+          return
+        }
+        b.disabled = true;
+        try {
+          const r = await fetch('/api/patients/' + encodeURIComponent(selected) + '/visit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              date
+            })
+          });
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
+          await refresh();
+          render();
+          if (el('visitResult')) el('visitResult').textContent = 'Saved: last clinic visit ' + shortDate(date + 'T12:00:00') + '.'
+        } catch (err) {
+          b.disabled = false;
+          if (el('visitResult')) el('visitResult').textContent = 'Could not save: ' + err.message
         }
         return
       }
@@ -1470,6 +1677,7 @@
       if (open) {
         selected = open.dataset.open || open.dataset.id;
         planFormFor = null;
+        showAllAnswers = false;
         render();
         return
       }
@@ -1600,29 +1808,12 @@
     refresh();
     setInterval(refresh, 4000);
 
-    // DEAP engagement safety net: synthetic escalation, not an emergency or missed-dose detector.
-    const escalationLabels = {
-      none: 'No overdue alert',
-      resolved: 'Follow-up resolved',
-      caregiver_notice: 'Caregiver notice simulated',
-      clinician_review: 'Clinician review needed'
-    };
     const oldStats = stats;
     stats = function() {
       const pending = patients.filter(p => p.escalation?.stage === 'clinician_review' && !p.escalation
         ?.acknowledged).length;
       return oldStats() +
         `<div class="panel" style="margin:0 0 20px;background:#fff8e8;border:1px solid #ead5a5"><strong>Engagement safety net · ${pending} unacknowledged review alert(s)</strong><p class="muted">No response is not proof of a missed dose or medical emergency. Notifications are simulated; no SMS is sent. Demo thresholds: 24h caregiver notice, 48h clinician review.</p><button class="button secondary" data-view="attention">Review attention queue</button></div>`
-    };
-    const oldDetail = detail;
-    detail = function(p) {
-      const e = p.escalation || {
-        stage: 'none',
-        acknowledged: false
-      };
-      const msg = escalationLabels[e.stage] || e.stage;
-      return oldDetail(p) +
-        `<div class="panel" style="margin-top:20px"><h2>Overdue check-in & escalation</h2><p class="muted">Engagement safety net only. An overdue response does not confirm a missed dose, unconsciousness, or an emergency. These are simulated notices, not real messages.</p><div class="list"><div class="item"><small>Current non-response stage</small><strong>${esc(msg)}</strong></div><div class="item"><small>Last recorded patient engagement · ${Math.floor(p.elapsedHours||0)}h elapsed (includes demo offset)</small><strong>${esc(p.lastEngagement?new Date(p.lastEngagement).toLocaleString():'—')}</strong></div><div class="item"><small>Clinician acknowledgment</small><strong>${e.acknowledged?'Acknowledged':'Not acknowledged'}</strong></div></div><p class="muted">Simulate time without engagement (fictional data only):</p><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="button secondary" data-sim="0">Reset timer</button><button class="button secondary" data-sim="25">Simulate 25h</button><button class="button secondary" data-sim="49">Simulate 49h</button></div><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="button" data-esc="acknowledge" ${['none','resolved'].includes(e.stage)||e.acknowledged?'disabled':''}>Acknowledge alert</button><button class="button secondary" data-esc="resolve" ${['none','resolved'].includes(e.stage)?'disabled':''}>Mark follow-up resolved</button></div><p id="escResult" class="muted" role="status"></p><h3>Audit trail (demo events)</h3><div id="escHistory" class="list"><span class="muted">Loading…</span></div><p class="muted">If a caregiver finds a patient unconscious or unresponsive, call 911 immediately. Do not wait for this app.</p></div>`
     };
     const oldRender = render;
     render = function() {
@@ -1635,11 +1826,26 @@
         if (!r.ok) return;
         const data = await r.json();
         if (selected !== pid) return;
+        const html = data.events.length ? data.events.map(x =>
+          `<div class="item"><strong>${esc(x.kind.replaceAll('_',' '))}</strong><small>${esc(new Date(x.at).toLocaleString())}</small><div>${esc(eventText(x.message))}</div></div>`
+        ).join('') : '<span class="muted">No events yet.</span>';
+        escCache = {
+          pid,
+          html
+        };
         const box = el('escHistory');
-        if (box) box.innerHTML = data.events.length ? data.events.map(x =>
-          `<div class="item"><strong>${esc(x.kind.replaceAll('_',' '))}</strong><small>${esc(new Date(x.at).toLocaleString())}</small><div>${esc(x.message)}</div></div>`
-          ).join('') : '<span class="muted">No events yet.</span>'
+        if (box) box.innerHTML = html
       } catch (e) {}
+    }
+
+    // Show barrier names the way the app shows them ('other' becomes “Something else”).
+    // Display only: stored events are not changed. A person's own words, after "(patient wrote:" or
+    // "(caregiver wrote:", are left exactly as written.
+    function eventText(msg) {
+      const cut = msg.search(/ \((patient|caregiver) wrote: "/);
+      const head = cut < 0 ? msg : msg.slice(0, cut),
+        tail = cut < 0 ? '' : msg.slice(cut);
+      return head.replace(/'([a-z]+)'/g, (m, k) => names[k] ? '“' + names[k] + '”' : m) + tail
     }
     document.addEventListener('click', async e => {
       const sim = e.target.closest('[data-sim]'),
@@ -1665,7 +1871,7 @@
         await refresh();
         render()
       } catch (err) {
-        const x = el('escResult');
+        const x = el(sim ? 'simResult' : 'escResult');
         if (x) x.textContent = err.message
       } finally {
         btn.disabled = false

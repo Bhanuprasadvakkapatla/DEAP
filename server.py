@@ -1433,7 +1433,7 @@ class Handler(SimpleHTTPRequestHandler):
     def route(self):
         path = unquote(urlparse(self.path).path)
         m = re.fullmatch(
-            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs|bat-recheck))?",
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs|visit|bat-recheck))?",
             path,
         )
         return path, m
@@ -1767,6 +1767,22 @@ class Handler(SimpleHTTPRequestHandler):
                 (pid, drawn.isoformat(), float(level)),
             )
             event(c, pid, "simulation", f"Demo only: lab result added ({drawn.isoformat()}, {float(level)} ng/mL)")
+        elif action == "visit":
+            # Demo only (no real EHR): set the last clinic visit date so the visit flag can appear or clear live.
+            try:
+                visit = date.fromisoformat(str(data.get("date", "")))
+            except ValueError:
+                return {"error": "Date must be YYYY-MM-DD"}, 400
+            # Allow one day ahead of the server's date for time-zone differences.
+            if visit > NOW().date() + timedelta(days=1):
+                return {"error": "Date cannot be in the future"}, 400
+            if visit.year < 2000:
+                return {"error": "Date is too far in the past"}, 400
+            c.execute(
+                "INSERT INTO chart_visits(patient_id,last_visit) VALUES (?,?) ON CONFLICT(patient_id) DO UPDATE SET last_visit=excluded.last_visit",
+                (pid, visit.isoformat()),
+            )
+            event(c, pid, "simulation", f"Demo only: last clinic visit set to {visit.isoformat()}")
         elif action == "plan-clock":
             # Demo only: move this patient's check-back clock forward. Real time is unchanged.
             days = data.get("days")

@@ -100,7 +100,7 @@ Packet must-keep #6: use risk signals already in the chart. All chart data here 
 - **No clinic visit in over 4 months** (calendar months; `DEAP_VISIT_MONTHS`, default `4`).
 - **No labs in over 6 weeks** (`DEAP_LAB_DAYS`, default `42`).
 
-No target range is shown and levels are never called high or low; we were not given those. Chart flags appear only for the care team (patient detail "Chart signals" and the worklist group "Chart flags — for team review", next action "Review at weekly team meeting"); a flag raises the patient's status to at least yellow. The patient and caregiver app never receives chart data. **Demo: add a lab result** (patient detail, labelled "Demo — no real EHR") adds a fictional result so a flag can appear live.
+No target range is shown and levels are never called high or low; we were not given those. Chart flags appear only for the care team (patient detail "Chart signals" and the worklist group "Chart flags — for team review", next action "Review at weekly team meeting"); a flag raises the patient's status to at least yellow. The patient and caregiver app never receives chart data. **Add a lab result** and **Add last clinic visit date** (patient detail, collapsed **Demo tools** section, labelled "Demo, no real EHR") add fictional chart data so a flag can appear or clear live.
 
 ### Center setup ("What if we have no psychologist?")
 
