@@ -537,6 +537,86 @@
       padding: 7px 9px
     }
 
+    /* My worklist: one-line rows. */
+    .wlgroup {
+      margin-top: 18px
+    }
+
+    .wlgroup h3 {
+      font-size: 15px;
+      margin: 0 0 8px;
+      display: inline
+    }
+
+    .wlgroup>h3 {
+      display: block
+    }
+
+    details.wlgroup>summary {
+      cursor: pointer;
+      margin-bottom: 8px
+    }
+
+    .wllist {
+      display: grid;
+      gap: 6px
+    }
+
+    .wlrow {
+      display: grid;
+      grid-template-columns: minmax(120px, auto) minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid #e7edf2;
+      border-radius: 11px;
+      cursor: pointer;
+      background: #fff
+    }
+
+    .wlrow:hover,
+    .wlrow:focus-visible {
+      background: #f5fafc
+    }
+
+    .wlname {
+      font-weight: 800;
+      white-space: nowrap
+    }
+
+    .wlreason {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 14px
+    }
+
+    .wlowner {
+      white-space: nowrap
+    }
+
+    .wldigest {
+      border: 1px solid #e2eaf0;
+      border-radius: 13px;
+      padding: 10px 14px
+    }
+
+    @media(max-width:700px) {
+      .wlrow {
+        grid-template-columns: minmax(0, 1fr) auto
+      }
+
+      .wlreason {
+        grid-column: 1/-1;
+        grid-row: 2;
+        white-space: normal
+      }
+
+      .wlowner {
+        display: none
+      }
+    }
+
     .chips {
       display: flex;
       flex-wrap: wrap;
@@ -958,6 +1038,10 @@
     const openHistory = new Set();
     document.addEventListener('toggle', e => {
       // Patient detail sections: remember open or closed.
+      if (e.target.dataset?.wl) {
+        wlOpen[e.target.dataset.wl] = e.target.open;
+        return
+      }
       const sec = e.target.dataset?.sec;
       if (sec) {
         secOpen[sec] = e.target.open;
@@ -1086,6 +1170,8 @@
     const section = (key, title, body, openByDefault, extra = '') =>
       `<details class="sec${key==='demo'?' demo':''}" id="sec-${key}" data-sec="${key}" ${(secOpen[key] ?? openByDefault)?'open':''}><summary><h2>${title}</h2>${extra}</summary><div class="secbody">${body}</div></details>`;
     // Barrier answers: only items where either person said Yes, unless "Show all 14 items" is on.
+    // Section to open after a patient is opened from a worklist row.
+    let pendingJump = null;
     let showAllAnswers = false,
       // Last activity log shown, so the 4-second refresh does not flash "Loading…".
       escCache = {
@@ -1228,7 +1314,7 @@
     }
     const everyoneToggle = () => signedIn && roles.includes(signedIn) ?
       `<label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showEveryone" ${showEveryone?'checked':''}> Show everyone</label><span class="muted" id="showingWho">${showEveryone?'Showing everyone.':'Showing only '+ownerLabel(signedIn)+'.'}</span>` :
-      '<span class="muted" id="showingWho">Not signed in: showing everyone. Use “Sign in as” at the top to see only your work.</span>';
+      '<span class="muted" id="showingWho">Showing everyone.</span>';
 
     function renderSignIn() {
       const box = el('signInBox');
@@ -1242,16 +1328,6 @@
       minute: '2-digit'
     }) : '—';
 
-    // Worklist groups, in the order they are shown. "later" = keep checking, not due yet (Show all only).
-    const GROUPS = [
-      ['review', 'Needs team review'],
-      ['overdue', 'Overdue'],
-      ['today', 'Due today'],
-      ['needs', 'Needs a plan'],
-      ['coming', 'Coming up'],
-      ['later', 'Keep checking (not due yet)']
-    ];
-    let showAllTasks = false;
     const localDay = d => new Date(d).toLocaleDateString('en-CA');
     // "Today" for this patient's check-backs, including any demo clock offset.
     const taskToday = t => localDay(Date.now() + (t.clockOffsetDays || 0) * 864e5);
@@ -1286,47 +1362,87 @@
       return (g === 'later' ? 'Keep checking · next check-back ' : 'Check back on ') + shortDate(t.dueDate)
     }
 
+    // My worklist: at most three groups of one-line rows. Each row: patient and age, one short reason
+    // (the existing reason text), the owner as a chip, and one button that opens the patient's page at
+    // the right section. Plans, outcomes and "Mark reviewed" are done on the patient's page.
+    const WL_GROUPS = [
+      ['now', 'Do now'],
+      ['week', 'This week'],
+      ['later', 'Later']
+    ];
+    const WL_MAX = 5;
+    // Groups the user expanded with "Show all", and whether "Later" / the digest are open.
+    const wlExpand = {},
+      wlOpen = {};
+
+    function worklistRows(role) {
+      const rows = [];
+      const add = (bucket, p, reason, owner, action, go, rank, extra = {}) => p && rows.push({
+        bucket,
+        p,
+        reason,
+        owner,
+        action,
+        go,
+        rank,
+        ...extra
+      });
+      const pat = id => patients.find(p => p.id === id);
+      // A barrier that needs team review also shows for the Nephrologist / NP / Pharmacist (as routed).
+      tasks.filter(x => role === 'all' || x.ownerRole === role || (x.needsReview && role === routeOf('Nephrologist / NP / Pharmacist'))).forEach(t => {
+        const p = pat(t.patientId),
+          g = taskGroup(t),
+          name = names[t.barrier] || t.barrier,
+          owner = ownerLabel(t.ownerRole);
+        const money = ['ranout', 'afford'].includes(t.barrier) && t.status === 'needs_plan';
+        if (t.needsReview) add('now', p, `Tried ${t.failedSinceReview} plans for ${name}. Physician review needed.`, owner, 'Review', 'plans', 2);
+        else if (money) add('now', p, `${name}. ${t.ownerRole} to follow up.`, owner, 'Make plan', 'plans', t.barrier === 'ranout' ? 0 : 1, {
+          doFirst: t.barrier === 'ranout'
+        });
+        else if (g === 'overdue') add('now', p, nextAction(t) + ' (' + name + ')', owner, 'Check back', 'plans', 4);
+        else if (g === 'today') add('week', p, nextAction(t) + ' (' + name + ')', owner, 'Check back', 'plans', 0);
+        else if (g === 'needs') add('week', p, 'Needs a plan: ' + name, owner, 'Make plan', 'plans', 1);
+        else add('later', p, nextAction(t) + ' (' + name + ')', owner, 'Check back', 'plans', g === 'coming' ? 0 : 1, {
+          due: t.dueDate
+        })
+      });
+      // Patient-level items. Red and 14-day silence: the patient's owners. Team-meeting items: the
+      // Transplant coordinator (as before).
+      const tc = role === 'all' || role === routeOf('Transplant coordinator');
+      patients.forEach(p => {
+        if (role !== 'all' && !ownsPatient(p, role)) return;
+        const reasons = p.attentionReasons || [];
+        if (p.escalation?.stage === 'clinician_review') add('now', p, reasons.find(r => r.startsWith('Overdue check-in')) || 'Overdue check-in: clinician review', 'Care team', 'Reach out', 'escalation', 3);
+        else if (p.status === 'red') add('now', p, reasons.find(r => !/^(Ran out|Can't afford|Tried)/.test(r)) || reasons[0] || 'Needs attention', 'Care team', 'Reach out', p.openRequests ? 'weekly' : 'weekly', 3);
+      });
+      if (tc) patients.forEach(p => {
+        const owner = ownerLabel(routeOf('Transplant coordinator'));
+        (p.rechecks || []).filter(r => r.due).forEach(r => add('week', p, 'Checklist re-check due (' + (r.person === 'caregiver' ? 'caregiver' : 'patient') + ')', owner, 'Reach out', 'checklist', 2));
+        if (p.chart?.flags?.length) add('week', p, p.chart.flags[0].text + (p.chart.flags.length > 1 ? ` (+${p.chart.flags.length-1} more)` : ''), owner, 'Review', 'chart', 3);
+        if (p.answers?.differ?.length) add('later', p, differText(p.answers.differ.length), owner, 'Review', 'answers', 2)
+      });
+      return rows
+    }
+
     function worklist() {
       const role = viewRole();
-      // A barrier that needs team review also shows for the Nephrologist / NP / Pharmacist (as routed);
-      // it stays with its own owner too.
-      const mine = tasks.filter(x => role === 'all' || x.ownerRole === role || (x.needsReview && role === routeOf('Nephrologist / NP / Pharmacist')));
-      const byGroup = Object.fromEntries(GROUPS.map(([g]) => [g, []]));
-      mine.forEach(t => byGroup[taskGroup(t)].push(t));
-      const byDue = (a, b) => String(a.dueDate).localeCompare(String(b.dueDate));
-      ['overdue', 'today', 'coming', 'later'].forEach(g => byGroup[g].sort(byDue));
-      byGroup.needs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      GROUPS.forEach(([g]) => byGroup[g] = ranoutFirst(byGroup[g], t => t.barrier));
-      const needYou = byGroup.review.length + byGroup.overdue.length + byGroup.today.length + byGroup.needs.length;
-      const shown = GROUPS.filter(([g]) => byGroup[g].length && (g !== 'later' || showAllTasks));
-      const section = ([g, label]) =>
-        `<div class="taskgroup" data-group="${g}"><h3>${label} <span class="muted">(${byGroup[g].length})</span></h3><div class="list">${byGroup[g].map(x=>taskCard(x, true)).join('')}</div></div>`;
-      // Chart flags are for the weekly team meeting (packet MAPS step 1): Transplant coordinator and All only.
-      const flagged = role === 'all' || role === routeOf('Transplant coordinator') ? patients.filter(p => p.chart?.flags?.length) : [];
-      const chartRow = p =>
-        `<div class="item chartrow" data-chart-patient="${esc(p.id)}"><strong>${patientName(p)}</strong>${p.chart.flags.map(f=>`<div>${esc(f.text)}</div>`).join('')}<div class="nextaction">→ Review at weekly team meeting</div>${p.chartMismatch?`<div class="mismatch">${MISMATCH}</div>`:''}<div style="margin-top:6px"><button class="link" data-open="${esc(p.id)}">View patient →</button></div></div>`;
-      const chartGroup = flagged.length ?
-        `<div class="taskgroup" data-group="chart"><h3>Chart flags — for team review <span class="muted">(${flagged.length})</span></h3><div class="list">${flagged.map(chartRow).join('')}</div></div>` :
-        '';
-      // Patient and caregiver answers differ (age 10+): for the Transplant coordinator to discuss at the visit.
-      const differing = role === 'all' || role === routeOf('Transplant coordinator') ? patients.filter(p => p.answers?.differ?.length) : [];
-      const differGroup = differing.length ?
-        `<div class="taskgroup" data-group="differ"><h3>To discuss at the visit <span class="muted">(${differing.length})</span></h3><div class="list">${differing.map(p=>`<div class="item differrow" data-differ-patient="${esc(p.id)}"><strong>${patientName(p)}</strong><div class="nextaction">→ ${differText(p.answers.differ.length)}</div><div class="meta">${p.answers.differ.map(k=>esc(names[k]||k)).join(' · ')}</div><div style="margin-top:6px"><button class="link" data-open="${esc(p.id)}">View patient →</button></div></div>`).join('')}</div></div>` :
-        '';
-      // 6-month checklist re-check due: for the Transplant coordinator.
-      const rechecks = role === 'all' || role === routeOf('Transplant coordinator') ? patients.flatMap(p => (p.rechecks || []).filter(r => r.due).map(r => ({
-        p,
-        r
-      }))) : [];
-      const recheckGroup = rechecks.length ?
-        `<div class="taskgroup" data-group="recheck"><h3>Checklist re-check due <span class="muted">(${rechecks.length})</span></h3><div class="list">${rechecks.map(({p,r})=>`<div class="item recheckrow" data-recheck-patient="${esc(p.id)}" data-person="${r.person}"><strong>${patientName(p)}</strong><div>${personLabel(p,r.person)} · last checklist ${esc(shortDate(r.lastDone))}</div><div class="nextaction">→ Ask them to retake the 14-item checklist (it is waiting on their Today screen)</div><div style="margin-top:6px"><button class="link" data-open="${esc(p.id)}">View patient →</button></div></div>`).join('')}</div></div>` :
-        '';
-      // This week's check-ins: for the Transplant coordinator (and All).
-      const digestGroup = role === 'all' || role === routeOf('Transplant coordinator') ?
-        `<div class="taskgroup" data-group="digest"><h3>This week's check-ins</h3>${weekDigest('weekDigest')}</div>` : '';
-      const body = shown.filter(([g]) => ['review', 'overdue', 'today', 'needs'].includes(g)).map(section).join('') + digestGroup + recheckGroup + differGroup + chartGroup +
-        shown.filter(([g]) => ['coming', 'later'].includes(g)).map(section).join('');
-      return `<div class="panel"><div class="toolbar">${everyoneToggle()}<label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all (including plans not due)</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
+      const rows = worklistRows(role);
+      const by = Object.fromEntries(WL_GROUPS.map(([g]) => [g, rows.filter(r => r.bucket === g).sort((a, b) => a.rank - b.rank || String(a.due || '').localeCompare(String(b.due || '')) || String(a.p.patientName).localeCompare(String(b.p.patientName)))]));
+      const age = p => p.family ? ', ' + esc(p.family.age) : '';
+      const row = r => `<div class="wlrow" role="button" tabindex="0" data-open="${esc(r.p.id)}" data-goto="${r.go}" data-wl-action="${esc(r.action)}"><span class="wlname">${patientName(r.p)}${age(r.p)}</span><span class="wlreason" title="${esc(r.reason)}">${r.doFirst?doFirstPill+' ':''}${esc(r.reason)}</span><span class="pill wlowner">${r.owner}</span><button class="button small wlbtn" data-open="${esc(r.p.id)}" data-goto="${r.go}">${esc(r.action)}</button></div>`;
+      const list = g => {
+        const all = by[g],
+          shown = wlExpand[g] ? all : all.slice(0, WL_MAX);
+        return `<div class="wllist">${shown.map(row).join('')}</div>${all.length>WL_MAX?`<button class="link" data-wl-more="${g}">${wlExpand[g]?'Show fewer':'Show all ('+all.length+')'}</button>`:''}`
+      };
+      const group = ([g, label]) => !by[g].length ? '' : g === 'later' ?
+        `<details class="wlgroup" data-group="later" data-wl="later" ${wlOpen.later?'open':''}><summary><h3>${label} <span class="muted">(${by[g].length})</span></h3></summary>${list(g)}</details>` :
+        `<div class="wlgroup" data-group="${g}"><h3>${label} <span class="muted">(${by[g].length})</span></h3>${list(g)}</div>`;
+      const n = by.now.length;
+      // This week's check-ins: one collapsed card at the bottom (Transplant coordinator and All).
+      const digest = role === 'all' || role === routeOf('Transplant coordinator') ?
+        `<details class="wlgroup wldigest" data-group="digest" data-wl="digest" ${wlOpen.digest?'open':''}><summary><h3>This week's check-ins</h3></summary>${weekDigest('weekDigest')}</details>` : '';
+      return `<div class="panel" id="worklistPanel"><div class="toolbar">${everyoneToggle()}</div><h2 id="needYou">${n?`${n} need${n===1?'s':''} you today`:'Nothing needs you today'}</h2>${WL_GROUPS.map(group).join('')||'<p class="muted">Nothing on your list right now.</p>'}${digest}</div>`
     }
 
     // ---- Families: enroll, personal links ----
@@ -1489,7 +1605,7 @@
         center: 'Center setup'
       } [view]);
       el('subheading').textContent = selected ? 'Review engagement and share a follow-up note.' :
-        view === 'worklist' ? 'Barriers patients reported, routed to the team member who follows up.' :
+        view === 'worklist' ? '' :
         view === 'attention' ? 'Prioritized patients based on demo check-ins and support requests.' :
         'Monitor check-ins and coordinate follow-up across the care journey.';
       document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset
@@ -1578,6 +1694,12 @@
         return
       }
       // Summary line on patient detail: open that section and scroll to it.
+      const more = e.target.closest('[data-wl-more]');
+      if (more) {
+        wlExpand[more.dataset.wlMore] = !wlExpand[more.dataset.wlMore];
+        render();
+        return
+      }
       const jump = e.target.closest('[data-jump]');
       if (jump) {
         const d = el('sec-' + jump.dataset.jump);
@@ -1850,6 +1972,7 @@
         selected = open.dataset.open || open.dataset.id;
         planFormFor = null;
         showAllAnswers = false;
+        pendingJump = open.dataset.goto || null;
         render();
         return
       }
@@ -1912,6 +2035,13 @@
         }
       }
     });
+    document.addEventListener('keydown', e => {
+      const r = e.target.closest?.('.wlrow');
+      if (r && e.target === r && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        r.click()
+      }
+    });
     document.addEventListener('input', e => {
       // Who leads follows the age (under 10 / 10-17 / 18+) until it is chosen by hand.
       if (e.target.dataset.personName !== undefined && centerDraft) {
@@ -1972,10 +2102,6 @@
           if (el('leadsMsg')) el('leadsMsg').textContent = 'Could not save: ' + err.message
         })
       }
-      if (e.target.id === 'showAllTasks') {
-        showAllTasks = e.target.checked;
-        render()
-      }
       if (e.target.id === 'signInAs') {
         signedIn = e.target.value;
         showEveryone = false;
@@ -2003,6 +2129,18 @@
     const oldRender = render;
     render = function() {
       oldRender();
+      // Opened from a worklist row: open that section and scroll to it.
+      if (selected && pendingJump) {
+        const d = el('sec-' + pendingJump);
+        pendingJump = null;
+        if (d) {
+          d.open = true;
+          secOpen[d.dataset.sec] = true;
+          d.scrollIntoView({
+            block: 'start'
+          })
+        }
+      }
       if (selected) loadEscHistory(selected)
     };
     async function loadEscHistory(pid) {
