@@ -937,6 +937,10 @@
         d_remEnc: "you've got this. Quick check-in time.",
         ws_discreetOn: 'Discreet mode is on: texts and previews use neutral words, with no mention of transplant or medicine.',
         ws_discreetOff: 'Discreet mode is off: texts and previews may mention your medicine.',
+        recheckTitle: 'Time for your 6-month check-in',
+        recheckDesc: 'Please answer the 14 questions again. Your earlier answers are kept.',
+        recheckBtn: 'Retake my checklist',
+        retakeChanged: 'Something changed? Retake my checklist',
         textLabel: 'Check in by text reply (no data needed)',
         txt_sim: 'Simulated text message — no real SMS sent',
         txt_prompt: 'how was your week? Reply 1 = going well, 2 = some bumps, 3 = hard week',
@@ -1121,6 +1125,10 @@
         d_remEnc: 'tú puedes. Es hora de un registro rápido.',
         ws_discreetOn: 'El modo discreto está activado: los mensajes y vistas previas usan palabras neutras, sin mencionar el trasplante ni la medicina.',
         ws_discreetOff: 'El modo discreto está desactivado: los mensajes y vistas previas pueden mencionar tu medicina.',
+        recheckTitle: 'Es hora de tu registro de 6 meses',
+        recheckDesc: 'Responde otra vez las 14 preguntas. Tus respuestas anteriores se guardan.',
+        recheckBtn: 'Volver a hacer mi lista',
+        retakeChanged: '¿Algo cambió? Volver a hacer mi lista',
         textLabel: 'Responder por mensaje de texto (sin datos)',
         txt_sim: 'Mensaje de texto simulado — no se envía ningún SMS real',
         txt_prompt: '¿cómo te fue esta semana? Responde 1 = bien, 2 = algunos problemas, 3 = semana difícil',
@@ -1281,6 +1289,32 @@
         await deapPoll();
         render()
       } catch (e) {}
+    }
+
+    // Has this person finished the 14-item checklist at least once?
+    const bat_done = () => batKeys.every(k => ['yes', 'no'].includes(s.batAnswers[k]));
+    // 6-month re-check (from the server): this person's next checklist is due.
+    const myRecheck = () => INVITE ? deapInvite?.recheck : deapView?.recheck;
+
+    function recheckCard() {
+      const r = myRecheck();
+      if (!r || !r.due) return '';
+      return `<div class="card soft" id="recheckCard"><div class="iconbubble">↻</div><h3>${t('recheckTitle')}</h3><p class="muted">${t('recheckDesc')}</p>${btn(t('recheckBtn'),'retake')}</div>`
+    }
+
+    // Start a NEW assessment: fresh answers and a new batId. Earlier answers stay in the server history.
+    function retakeChecklist() {
+      Object.assign(s, {
+        batAnswers: {},
+        barriers: [],
+        primary: '',
+        other: '',
+        strategies: [],
+        batId: new Date().toISOString(),
+        step: 1
+      });
+      batTried = false;
+      go('onboard')
     }
 
     // Weekly answers from the app and from text replies, oldest first.
@@ -1449,7 +1483,7 @@
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        textThread() + checkBackCard() + myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        recheckCard() + textThread() + checkBackCard() + myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
@@ -1484,7 +1518,7 @@
     function settings() {
       return header('YOUR SPACE', t('settingsTitle'), t('personalizeDesc')) +
         // With a personal link, who is answering comes from the link: no name fields, no role switch.
-        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}${s.role!=='caregiver'?`<label class="choice" style="font-size:13px"><span>${t('discreetLabel')}</span><input id="discreet" type="checkbox" ${isDiscreet()?'checked':''}></label>`:''}${isOwner()?`<label class="choice" style="font-size:13px"><span>${t('textLabel')}</span><input id="textCheckin" type="checkbox" ${s.textCheckin?'checked':''}></label>`:''}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
+        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}${s.role!=='caregiver'?`<label class="choice" style="font-size:13px"><span>${t('discreetLabel')}</span><input id="discreet" type="checkbox" ${isDiscreet()?'checked':''}></label>`:''}${isOwner()?`<label class="choice" style="font-size:13px"><span>${t('textLabel')}</span><input id="textCheckin" type="checkbox" ${s.textCheckin?'checked':''}></label>`:''}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${bat_done()?btn(t('retakeChanged'),'retake','secondary'):''}<div style="height:9px"></div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
     }
 
@@ -1599,6 +1633,7 @@
         save();
         return notice(t('contactDone'))
       }
+      if (a === 'retake') return retakeChecklist();
       if (a === 'sendCheck') {
         const p = deapPlans.find(x => x.taskId === checkDraft.taskId);
         if (!p) return;
@@ -1856,6 +1891,7 @@
         if (!r.ok) return;
         const data = await r.json();
         deapStatus(true);
+        if (!INVITE) deapView = data.patient;
         if (INVITE) {
           const first = !deapInvite;
           deapInvite = data.invite;
@@ -1882,7 +1918,9 @@
     // Show new or changed plans; wait while the patient is typing so nothing they type is lost.
     function deapUpdatePlans(plans, clockDays) {
       // Also re-render when what this link may see changes (sharing, who leads, check-back dates).
-      const key = JSON.stringify([plans, clockDays, deapInvite, deapView?.checkbackDates, deapView?.sharedWeekly]);
+      const key = JSON.stringify([plans, clockDays, deapInvite, deapView?.checkbackDates, deapView?.sharedWeekly,
+        deapView?.recheck
+      ]);
       if (key !== deapPlansKey) {
         deapPlans = plans;
         deapClockDays = clockDays;

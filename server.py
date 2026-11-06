@@ -68,6 +68,11 @@ if DURABILITY_DAYS < 1:
     raise ValueError("DEAP_DURABILITY_DAYS must be at least 1")
 OUTCOME_NAMES = {"working": "Working", "not_working": "Not working", "adjust": "Adjust"}
 
+# The 14-item checklist is repeated every 6 months, or sooner if something changes (packet page 4).
+BAT_MONTHS = int(os.environ.get("DEAP_BAT_MONTHS", "6"))
+if BAT_MONTHS < 1:
+    raise ValueError("DEAP_BAT_MONTHS must be at least 1")
+
 # Families (packet page 4, must-keep #2): caregiver only under 10; patient and caregiver from 10.
 # "Who leads" decides who gets reminders and check-backs (hand-off of responsibility).
 LEADS_NAMES = {"parent": "Parent leads", "shared": "Shared", "patient": "Patient leads"}
@@ -172,6 +177,13 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS caregiver_states (family_id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
         )
+        # Every completed checklist (each person, each assessment), so old answers are kept.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS bat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, person TEXT NOT NULL, bat_id TEXT NOT NULL, completed_at TEXT NOT NULL, answers TEXT NOT NULL, barriers TEXT NOT NULL, own_words TEXT NOT NULL DEFAULT '', UNIQUE(patient_id, person, bat_id))"
+        )
+        # Demo only: days added to "now" for the 6-month re-check. Real time is unchanged.
+        if "bat_clock_days" not in [r["name"] for r in c.execute("PRAGMA table_info(patients)")]:
+            c.execute("ALTER TABLE patients ADD COLUMN bat_clock_days INTEGER NOT NULL DEFAULT 0")
         # Weekly check-ins sent by text reply (simulated SMS). Kept apart from the patient's state.
         c.execute(
             "CREATE TABLE IF NOT EXISTS text_replies (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, person TEXT NOT NULL, body TEXT NOT NULL, status TEXT, reply TEXT NOT NULL, at TEXT NOT NULL)"
@@ -249,6 +261,11 @@ def init():
             sync_tasks(c, row["id"], json.loads(row["state"]))
         if fresh_seed:
             seed_plans(c)
+        # Record checklists finished before the history table existed (and the seed ones).
+        for row in c.execute("SELECT id, state, updated_at FROM patients").fetchall():
+            record_bat(c, row["id"], owner_person(c, row["id"]), json.loads(row["state"]), backfill=True)
+        for row in c.execute("SELECT family_id, state FROM caregiver_states").fetchall():
+            record_bat(c, row["family_id"], "caregiver", json.loads(row["state"]), backfill=True)
         # Chart data (demo only, no real EHR). Chart-owned: never part of the patient's state.
         c.execute(
             "CREATE TABLE IF NOT EXISTS chart_visits (patient_id TEXT PRIMARY KEY, last_visit TEXT NOT NULL, FOREIGN KEY(patient_id) REFERENCES patients(id))"
@@ -292,6 +309,78 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
         )
     event(c, fid, "enrolled", f"Family enrolled (age {age}, {LEADS_NAMES[leads or default_leads(age)]}); personal links created")
     return fid
+
+
+def owner_person(c, pid):
+    """Who answers in the patient record: the caregiver for a child under 10, else the patient."""
+    f = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    return "caregiver" if f and f["age"] < 10 else "patient"
+
+
+def record_bat(c, pid, person, st, backfill=False):
+    """Keep each completed checklist (one row per assessment). Answers changed during the same
+    assessment update that row; a new batId is a new assessment."""
+    if not bat_complete(st):
+        return
+    bat_id = st.get("batId") or "initial"
+    row = c.execute(
+        "SELECT id FROM bat_history WHERE patient_id=? AND person=? AND bat_id=?", (pid, person, bat_id)
+    ).fetchone()
+    answers = json.dumps(st.get("batAnswers") or {})
+    barriers = json.dumps([b for b in BARRIER_KEYS if b in st.get("barriers", [])])
+    # The person's "Something else" words for this assessment, exactly as written.
+    words = st.get("other", "") if "other" in st.get("barriers", []) else ""
+    if row:
+        c.execute("UPDATE bat_history SET answers=?, barriers=?, own_words=? WHERE id=?", (answers, barriers, words, row["id"]))
+        return
+    when = iso()
+    if backfill:
+        try:
+            when = iso(datetime.fromisoformat(bat_id.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    c.execute(
+        "INSERT INTO bat_history(patient_id,person,bat_id,completed_at,answers,barriers,own_words) VALUES (?,?,?,?,?,?,?)",
+        (pid, person, bat_id, when, answers, barriers, words),
+    )
+    if not backfill:
+        # A finished checklist starts a new 6-month period (and clears the demo jump).
+        c.execute("UPDATE patients SET bat_clock_days=0 WHERE id=?", (pid,))
+        event(c, pid, "checklist", f"{person.capitalize()} completed the 14-item checklist")
+
+
+def recheck_info(c, pid, person):
+    """Last completed checklist, next due date, and then-vs-now for one person."""
+    hist = c.execute(
+        "SELECT completed_at, barriers FROM bat_history WHERE patient_id=? AND person=? ORDER BY completed_at, id",
+        (pid, person),
+    ).fetchall()
+    if not hist:
+        return None
+    clock = c.execute("SELECT bat_clock_days FROM patients WHERE id=?", (pid,)).fetchone()["bat_clock_days"]
+    last = datetime.fromisoformat(hist[-1]["completed_at"].replace("Z", "+00:00"))
+    due = add_months(last.date(), BAT_MONTHS)
+    info = {
+        "person": person,
+        "lastDone": hist[-1]["completed_at"],
+        "nextDue": due.isoformat(),
+        "due": (NOW() + timedelta(days=clock)).date() >= due,
+        "count": len(hist),
+    }
+    if len(hist) >= 2:
+        then, now = set(json.loads(hist[-2]["barriers"])), set(json.loads(hist[-1]["barriers"]))
+        info["added"] = [b for b in BARRIER_KEYS if b in now - then]
+        info["resolved"] = [b for b in BARRIER_KEYS if b in then - now]
+    return info
+
+
+def family_rechecks(c, pid):
+    """Re-check info for each person who answers for this patient."""
+    out = [recheck_info(c, pid, owner_person(c, pid))]
+    f = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    if f and f["age"] >= 10:
+        out.append(recheck_info(c, pid, "caregiver"))
+    return [x for x in out if x]
 
 
 # Text replies for the weekly check-in: 1 = Green, 2 = Yellow, 3 = Red.
@@ -368,6 +457,7 @@ def save_main_state(c, pid, state):
         record_activity(c, pid)
     if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers", "batId")):
         sync_tasks(c, pid, state)
+        record_bat(c, pid, owner_person(c, pid), state)
     log_checkbacks(c, pid, old.get("checkbacks") or {}, state.get("checkbacks") or {})
     row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     recalc(c, row)
@@ -381,9 +471,10 @@ def save_caregiver_state(c, fid, state):
         "INSERT INTO caregiver_states(family_id,state,updated_at) VALUES (?,?,?) ON CONFLICT(family_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at",
         (fid, json.dumps(state), iso()),
     )
-    if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers")):
+    if any(state.get(k) != old.get(k) for k in ("barriers", "batAnswers", "batId")):
         main = json.loads(c.execute("SELECT state FROM patients WHERE id=?", (fid,)).fetchone()["state"])
         sync_tasks(c, fid, main)
+        record_bat(c, fid, "caregiver", state)
     log_checkbacks(c, fid, old.get("checkbacks") or {}, state.get("checkbacks") or {}, "Caregiver")
     # When the caregiver helps lead, their check-ins count as activity for the family.
     leads = c.execute("SELECT leads FROM families WHERE id=?", (fid,)).fetchone()["leads"]
@@ -436,6 +527,8 @@ def invite_view(c, inv):
         leads in ("shared", "patient") if inv["person"] == "patient" else leads in ("parent", "shared")
     )
     who["getsCheckbacks"] = gets
+    # This person's own 6-month re-check.
+    who["recheck"] = recheck_info(c, inv["family_id"], owner_person(c, inv["family_id"]) if owns_record(inv) else "caregiver")
     if owns_record(inv):
         # ownState: this person's own saved answers, so a new device can pick them up.
         return {"invite": who, "patient": derive(prow, c), "ownState": main}
@@ -731,24 +824,26 @@ def answer_compare(c, pid, st):
 
 
 def sync_tasks(c, pid, state):
-    """Keep one task per "yes" barrier for the patient's current assessment.
+    """Keep one active task per "yes" barrier.
 
-    Runs only once all 14 BAT items are answered. A barrier changed back to "no"
-    in the same assessment removes its task only while it has no plan yet.
+    Runs only once all 14 BAT items are answered. A re-check (new assessment) carries on
+    the existing task for a barrier that is still "yes" instead of adding a second one.
+    A barrier that is no longer "yes" loses its task only while it has no plan yet.
     """
     fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
     # Each person who has finished the 14 items counts. For a family: one task per barrier.
     voices = [v for v in [state, caregiver_state(c, pid) if fam and fam["age"] >= 10 else None] if v and bat_complete(v)]
     if not voices:
         return
-    assessment = "family" if fam else (state.get("batId") or "initial")
+    # New tasks are labelled with the newest assessment among the voices.
+    assessment = max((v.get("batId") or "initial") for v in voices)
     said = {b for v in voices for b in v.get("barriers", [])}
     yes = [b for b in BARRIER_OWNERS if b in said]
     existing = {
         r["barrier"]: r
         for r in c.execute(
-            "SELECT id, barrier, status FROM tasks WHERE patient_id=? AND assessment=?",
-            (pid, assessment),
+            "SELECT id, barrier, status FROM tasks WHERE patient_id=? AND status IN ('needs_plan','plan_agreed','keep_checking')",
+            (pid,),
         )
     }
     for b in yes:
@@ -930,6 +1025,7 @@ def derive(row, c, chart=False):
                 status = "yellow"
         extra = {
             "family": family_info(c, pid),
+            "rechecks": family_rechecks(c, pid),
             "answers": answer_compare(c, pid, state),
             "sharing": family_sharing(state, (family_info(c, pid) or {}).get("leads", "")),
             "chart": signals,
@@ -972,6 +1068,8 @@ def derive(row, c, chart=False):
         demoOffsetHours=row["demo_offset_hours"],
         # All weekly answers, in-app and by text reply (each text one marked via "text").
         weekly=weekly,
+        # The record owner's 6-month re-check (last checklist, next due).
+        recheck=recheck_info(c, pid, owner_person(c, pid)),
         textReplies=[
             dict(r)
             for r in c.execute(
@@ -1148,7 +1246,7 @@ class Handler(SimpleHTTPRequestHandler):
     def route(self):
         path = unquote(urlparse(self.path).path)
         m = re.fullmatch(
-            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs))?",
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs|bat-recheck))?",
             path,
         )
         return path, m
@@ -1440,6 +1538,15 @@ class Handler(SimpleHTTPRequestHandler):
                 "UPDATE patients SET demo_offset_hours=? WHERE id=?", (hours, pid)
             )
             event(c, pid, "simulation", f"Demo time offset set to {hours} hours")
+        elif action == "bat-recheck":
+            # Demo only: move this patient's re-check clock so the 6-month checklist is due now.
+            infos = family_rechecks(c, pid)
+            if not infos:
+                return {"error": "No completed checklist yet"}, 409
+            today = NOW().date()
+            days = max(0, max((date.fromisoformat(i["nextDue"]) - today).days for i in infos))
+            c.execute("UPDATE patients SET bat_clock_days=? WHERE id=?", (days, pid))
+            event(c, pid, "simulation", f"Demo only: 6-month checklist re-check made due (clock +{days} days)")
         elif action == "labs":
             # Demo only (no real EHR): add a fictional lab result so a chart flag can appear live.
             try:
