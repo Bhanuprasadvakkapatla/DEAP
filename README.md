@@ -105,7 +105,7 @@ New Spanish text for families (who sees what, sharing, hand-off, the Progress ta
 
 Packet must-keep #6: use risk signals already in the chart. All chart data here is fictional and stored in server tables (`chart_visits`, `labs`), never in the patient's state. Three flags, computed on the server:
 
-- **Levels unsteady**: standard deviation of the last 4 tacrolimus levels above `DEAP_TAC_SD` (default `2.0`). Needs at least 4 draws. The packet says "swing more than 2 SD across 4 draws". We read this as the standard deviation of the last 4 tacrolimus levels being above 2. Confirm with the clinical team. (We use the sample standard deviation.)
+- **Levels unsteady**: standard deviation of the last 4 tacrolimus levels is `DEAP_TAC_SD` or more (default `2.0`), compared to one decimal as shown. Needs at least 4 levels; with fewer, Chart signals shows "Needs 4 levels to check". Chart signals shows the number, for example "SD of last 4 levels: 4.9 (flag at 2 or more)". The packet says "swing more than 2 SD across 4 draws"; the team asked for "2 or more". Confirm with the clinical team. (We use the sample standard deviation.)
 - **No clinic visit in over 4 months** (calendar months; `DEAP_VISIT_MONTHS`, default `4`).
 - **No labs in over 6 weeks** (`DEAP_LAB_DAYS`, default `42`).
 

@@ -189,8 +189,9 @@ def birthday_rules(c, fid):
 
 
 # Chart risk signals (packet page 4, must-keep #6). Demo settings; the clinical team sets real ones.
-# The packet says "swing more than 2 SD across 4 draws". We read this as the standard deviation
-# of the last 4 tacrolimus levels being above 2. Confirm with the clinical team.
+# The packet says "swing more than 2 SD across 4 draws". As the team asked, we flag when the
+# standard deviation of the last 4 tacrolimus levels is 2 or more (shown to one decimal; the same
+# rounded number is compared, so "2.0" on screen always means flagged). Confirm with the clinical team.
 TAC_SD = float(os.environ.get("DEAP_TAC_SD", "2.0"))
 TAC_DRAWS = 4
 VISIT_MONTHS = int(os.environ.get("DEAP_VISIT_MONTHS", "4"))  # calendar months
@@ -478,7 +479,7 @@ def reports(c):
         sp = chart_signals(c, r["id"])["spread"]
         if sp is None:
             no_data += 1
-        elif sp <= TAC_SD:
+        elif not levels_unsteady(sp):
             steady += 1
         else:
             unsteady += 1
@@ -1010,6 +1011,12 @@ def add_months(d, n):
     return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
 
 
+def levels_unsteady(spread):
+    """Levels unsteady: SD of the last 4 levels is TAC_SD or more (compared as shown, to one decimal).
+    None (fewer than 4 levels) is never flagged."""
+    return spread is not None and round(spread, 1) >= TAC_SD
+
+
 def chart_signals(c, pid):
     """Chart risk signals for one patient (clinician-only). No target range; never high/low."""
     today = NOW().date()
@@ -1028,8 +1035,8 @@ def chart_signals(c, pid):
     last_visit = v["last_visit"] if v else None
     last_lab = draws[0]["drawn_on"] if draws else None
     flags = []
-    if spread is not None and spread > TAC_SD:
-        flags.append({"kind": "unsteady", "text": f"Levels unsteady: spread {spread:.1f} across last {TAC_DRAWS} draws"})
+    if levels_unsteady(spread):
+        flags.append({"kind": "unsteady", "text": f"Levels unsteady: SD of last {TAC_DRAWS} levels: {spread:.1f} (flag at {TAC_SD:g} or more)"})
     if last_visit and today > add_months(date.fromisoformat(last_visit), VISIT_MONTHS):
         flags.append({"kind": "no_visit", "text": f"No clinic visit in over {VISIT_MONTHS} months"})
     if last_lab and (today - date.fromisoformat(last_lab)).days > LAB_DAYS:
@@ -1041,6 +1048,7 @@ def chart_signals(c, pid):
         "lastLab": last_lab,
         "recentLevels": recent,
         "spread": spread,
+        "threshold": TAC_SD,
         "flags": flags,
     }
 
