@@ -1819,6 +1819,17 @@ def lan_address():
             return "127.0.0.1"
 
 
+class Server(ThreadingHTTPServer):
+    """On Windows, ports can normally be shared by two copies of the app; claim the port exclusively instead."""
+
+    allow_reuse_address = os.name != "nt"  # restarts after a clean stop still work on Mac/Linux
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def phone_access():
     """Can phones reach this server, and at what address? Used to build invite links that work on a phone."""
     if HOST in ("0.0.0.0", "::"):
@@ -1837,6 +1848,12 @@ if __name__ == "__main__":
         help="delete and re-create the demo database with fresh demo patients, then start",
     )
     args = parser.parse_args()
+    # Claim the port first: a second copy must stop here, before --reset can touch the running copy's data.
+    try:
+        server = Server((HOST, PORT), Handler)
+    except OSError:
+        print(f"Another copy of this app is already running on port {PORT}. Close that window first.", flush=True)
+        raise SystemExit(1)
     if args.reset:
         reset_db()
     else:
@@ -1862,4 +1879,4 @@ if __name__ == "__main__":
             "Warning: anyone on this network can open the demo (no login). Use fictional data only.",
             flush=True,
         )
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    server.serve_forever()
