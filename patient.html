@@ -3,16 +3,122 @@
  <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
-  <meta content="#0b2037" name="theme-color"/>
+  <meta content="#0f2333" name="theme-color"/>
   <title>
    KTx-CONNECT | Patient &amp; Family
   </title>
   <style>
+    /* Calm, quiet look for teens and caregivers: one accent colour, soft cards, line icons, no
+       gamified effects. Colours are tokens so light and dark mode share every rule below.
+       Dark mode follows the phone unless the person picks Light or Dark in Settings. */
     :root {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #183047;
-      background: #eaf0f3;
-      font-synthesis: none
+      --bg: #eef2f4;
+      --surface: #ffffff;
+      --surface-2: #f3f6f7;
+      --soft: #e9f5f0;
+      --soft-border: #cfe6dc;
+      --border: #d9e3e6;
+      --field-border: #7b8e98;
+      --text: #13212d;
+      --text-2: #44576a;
+      --text-3: #4f6270;
+      --accent: #0d7560;
+      --accent-hover: #0a6150;
+      --on-accent: #ffffff;
+      --accent-ink: #0b6652;
+      --accent-soft: #dff1e9;
+      --header-bg: #0f2333;
+      --header-text: #ffffff;
+      --header-sub: #c9d7df;
+      --header-line: #6f8b99;
+      --yellow-bg: #fff2d4;
+      --yellow-ink: #6f4a08;
+      --red-bg: #fde7e2;
+      --red-ink: #8f2f22;
+      --blue-bg: #e5eef9;
+      --blue-ink: #234f7c;
+      --toast-bg: #13293a;
+      --toast-text: #ffffff;
+      --shadow: 0 1px 2px rgba(15, 35, 51, .05), 0 6px 18px rgba(15, 35, 51, .06);
+      --focus: #2c8f78;
+      --frame: #0f2333;
+      color-scheme: light;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      font-synthesis: none;
+      -webkit-text-size-adjust: 100%
+    }
+
+    /* Dark tokens: used when the phone is in dark mode (unless Light is chosen), or when Dark is chosen. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0b1218;
+        --surface: #141e27;
+        --surface-2: #1a2631;
+        --soft: #13261f;
+        --soft-border: #22423a;
+        --border: #263744;
+        --field-border: #6f8696;
+        --text: #e8eff3;
+        --text-2: #b2c1cb;
+        --text-3: #a9b9c4;
+        --accent: #5fd0ae;
+        --accent-hover: #7ddcbf;
+        --on-accent: #062018;
+        --accent-ink: #79dcbd;
+        --accent-soft: #183a31;
+        --header-bg: #08111a;
+        --header-text: #f2f7fa;
+        --header-sub: #b7c6cf;
+        --header-line: #4d6574;
+        --yellow-bg: #3a2e10;
+        --yellow-ink: #f2d38a;
+        --red-bg: #3e1c18;
+        --red-ink: #f7b4a8;
+        --blue-bg: #16283b;
+        --blue-ink: #abcbef;
+        --toast-bg: #e8eff3;
+        --toast-text: #0b1218;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
+        --focus: #7ddcbf;
+        --frame: #000000;
+        color-scheme: dark
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0b1218;
+      --surface: #141e27;
+      --surface-2: #1a2631;
+      --soft: #13261f;
+      --soft-border: #22423a;
+      --border: #263744;
+      --field-border: #6f8696;
+      --text: #e8eff3;
+      --text-2: #b2c1cb;
+      --text-3: #a9b9c4;
+      --accent: #5fd0ae;
+      --accent-hover: #7ddcbf;
+      --on-accent: #062018;
+      --accent-ink: #79dcbd;
+      --accent-soft: #183a31;
+      --header-bg: #08111a;
+      --header-text: #f2f7fa;
+      --header-sub: #b7c6cf;
+      --header-line: #4d6574;
+      --yellow-bg: #3a2e10;
+      --yellow-ink: #f2d38a;
+      --red-bg: #3e1c18;
+      --red-ink: #f7b4a8;
+      --blue-bg: #16283b;
+      --blue-ink: #abcbef;
+      --toast-bg: #e8eff3;
+      --toast-text: #0b1218;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
+      --focus: #7ddcbf;
+      --frame: #000000;
+      color-scheme: dark
     }
 
     * {
@@ -20,14 +126,17 @@
     }
 
     body {
-      margin: 0
+      margin: 0;
+      background: var(--bg);
+      color: var(--text)
     }
 
     button,
     input,
     textarea,
     select {
-      font: inherit
+      font: inherit;
+      color: inherit
     }
 
     button {
@@ -38,8 +147,21 @@
     input:focus-visible,
     select:focus-visible,
     textarea:focus-visible {
-      outline: 3px solid #47b89a;
-      outline-offset: 3px
+      outline: 3px solid var(--focus);
+      outline-offset: 2px
+    }
+
+    /* Line icons (inline SVG): they take the text colour. */
+    .ic {
+      width: 1.25em;
+      height: 1.25em;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: -0.25em
     }
 
     .app {
@@ -47,8 +169,8 @@
       margin: auto;
       display: grid;
       grid-template-columns: 1fr 430px;
-      gap: 50px;
-      padding: 45px 24px;
+      gap: 56px;
+      padding: 48px 24px;
       align-items: start
     }
 
@@ -58,71 +180,75 @@
 
     .eyebrow {
       font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 2px;
-      color: #18846e;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      color: var(--accent-ink);
       text-transform: uppercase
     }
 
     .intro h1 {
-      font-size: clamp(36px, 5vw, 64px);
-      line-height: 1.07;
-      letter-spacing: -2.5px;
-      color: #102b45;
+      font-size: clamp(34px, 4.6vw, 58px);
+      line-height: 1.08;
+      letter-spacing: -1.5px;
+      color: var(--text);
       margin: 18px 0
+    }
+
+    .intro h1 .accent {
+      color: var(--accent-ink)
     }
 
     .intro p {
       font-size: 18px;
       line-height: 1.65;
-      color: #4b6173;
+      color: var(--text-2);
       max-width: 530px
     }
 
     .features {
       display: grid;
       gap: 14px;
-      margin-top: 35px
+      margin-top: 32px
     }
 
     .feature {
       display: flex;
       gap: 14px;
       align-items: center;
-      color: #2d475b
+      color: var(--text)
     }
 
     .feature b {
       display: grid;
       place-items: center;
-      background: #d8eee7;
+      background: var(--accent-soft);
       border-radius: 12px;
-      width: 38px;
-      height: 38px;
-      color: #13735e
+      width: 40px;
+      height: 40px;
+      color: var(--accent-ink)
     }
 
     .note {
       margin-top: 40px;
       font-size: 13px;
-      color: #6c7f8c
+      color: var(--text-3)
     }
 
     .phone {
-      background: #f7faf9;
+      background: var(--bg);
       max-width: 430px;
       min-height: 760px;
-      border: 8px solid #10283f;
-      border-radius: 42px;
-      box-shadow: 0 24px 75px #173f5b30;
+      border: 8px solid var(--frame);
+      border-radius: 40px;
+      box-shadow: 0 24px 70px rgba(15, 35, 51, .22);
       overflow: hidden;
       position: relative
     }
 
     .top {
-      background: #0b263e;
-      color: white;
-      padding: 22px 22px 20px
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 20px 20px 18px
     }
 
     .topline {
@@ -133,117 +259,165 @@
     }
 
     .logo {
-      font-weight: 850;
-      letter-spacing: -.6px;
-      font-size: 21px
+      font-weight: 800;
+      letter-spacing: -.4px;
+      font-size: 20px
     }
 
     .logo span {
-      color: #4bd1a5
+      color: #7fe0c2
     }
 
     .tag {
       font-size: 10px;
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: .8px;
-      color: #a5e9d4
+      color: var(--header-sub)
     }
 
     .lang {
-      border: 1px solid #6a8b9d;
+      border: 1px solid var(--header-line);
       background: transparent;
-      color: white;
-      padding: 7px 10px;
-      border-radius: 9px;
+      color: var(--header-text);
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 12px;
       font-size: 12px;
-      font-weight: 750
+      font-weight: 700;
+      letter-spacing: .4px;
+      transition: background-color .15s
+    }
+
+    .lang:hover {
+      background: rgba(255, 255, 255, .08)
     }
 
     .top p {
-      color: #c0d5df;
-      font-size: 13px;
+      color: var(--header-sub);
+      font-size: 14px;
       margin: 6px 0 0
     }
 
+    /* Connection chip in the header (dot drawn here, not a text symbol). */
+    .conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 10px;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #e3f4ec;
+      color: #145643
+    }
+
+    .conn::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor
+    }
+
+    .conn.off {
+      background: #fff0cf;
+      color: #6a4507
+    }
+
+    .conn.off::before {
+      background: transparent;
+      box-shadow: inset 0 0 0 1.5px currentColor
+    }
+
     .screen {
-      padding: 22px 20px 100px;
+      padding: 22px 18px 104px;
       min-height: 570px
     }
 
     .card {
-      background: #fff;
-      border: 1px solid #e0e9e8;
-      border-radius: 18px;
-      padding: 19px;
-      box-shadow: 0 5px 18px #12374d09;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
       margin-bottom: 14px
     }
 
     .card.soft {
-      background: #e9f6f0;
-      border-color: #d5eae0
+      background: var(--soft);
+      border-color: var(--soft-border);
+      box-shadow: none
     }
 
     .small {
-      font-size: 12px;
-      /* darkened for WCAG 4.5:1, also on the soft green card */
-      color: #5b737c
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-3)
     }
 
     .label {
-      font-size: 13px;
-      color: #466174;
-      font-weight: 750;
+      font-size: 14px;
+      color: var(--text-2);
+      font-weight: 650;
       display: block;
-      margin: 13px 0 7px
+      margin: 14px 0 7px
     }
 
     h2 {
-      font-size: 25px;
-      letter-spacing: -.8px;
-      line-height: 1.17;
+      font-size: 24px;
+      letter-spacing: -.5px;
+      line-height: 1.2;
       margin: 6px 0 10px;
-      color: #102d43
+      color: var(--text);
+      font-weight: 750
     }
 
     h3 {
-      font-size: 17px;
-      letter-spacing: -.3px;
+      font-size: 18px;
+      letter-spacing: -.2px;
+      line-height: 1.3;
       margin: 0 0 8px;
-      color: #18354b
+      color: var(--text);
+      font-weight: 700
     }
 
     p {
-      line-height: 1.5
+      line-height: 1.55
     }
 
     .muted {
-      color: #62798a;
-      font-size: 14px
+      color: var(--text-2);
+      font-size: 15px
     }
 
     .hero {
-      font-size: 13px;
-      font-weight: 800;
-      color: #1c806b;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-ink);
       text-transform: uppercase;
-      letter-spacing: 1px
+      letter-spacing: 1.2px
     }
 
     .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
       border: 0;
-      border-radius: 13px;
-      padding: 14px 16px;
-      background: #117d66;
-      color: #fff;
-      font-weight: 800;
+      border-radius: 14px;
+      padding: 13px 16px;
+      background: var(--accent);
+      color: var(--on-accent);
+      font-weight: 700;
       width: 100%;
-      min-height: 48px;
-      transition: transform .15s
+      min-height: 50px;
+      margin: 4px 0;
+      transition: background-color .15s, transform .15s
     }
 
     .btn:hover {
-      background: #0c6956
+      background: var(--accent-hover)
     }
 
     .btn:active {
@@ -251,24 +425,30 @@
     }
 
     .btn.secondary {
-      background: #e8f0f2;
-      color: #17364a
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--field-border)
     }
 
     .btn.outline {
-      background: #fff;
-      border: 1px solid #b8cdd1;
-      color: #204e60
+      background: var(--surface);
+      border: 1px solid var(--field-border);
+      color: var(--text)
+    }
+
+    .btn.secondary:hover,
+    .btn.outline:hover {
+      background: var(--accent-soft)
     }
 
     .btn.warn {
-      background: #fff1e9;
-      color: #9a4d21
+      background: var(--yellow-bg);
+      color: var(--yellow-ink)
     }
 
     .btnrow {
       display: flex;
-      gap: 9px
+      gap: 10px
     }
 
     .btnrow .btn {
@@ -280,26 +460,40 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       text-align: left;
-      background: white;
-      border: 1.5px solid #dbe5e6;
-      border-radius: 13px;
-      padding: 14px;
+      background: var(--surface);
+      border: 1.5px solid var(--field-border);
+      border-radius: 14px;
+      padding: 13px 14px;
       margin: 9px 0;
-      min-height: 53px;
-      color: #244253;
-      font-weight: 650
+      min-height: 52px;
+      color: var(--text);
+      font-weight: 600;
+      transition: background-color .15s, border-color .15s
     }
 
     .choice[aria-pressed=true] {
-      background: #e8f6f0;
-      border-color: #0e866a;
-      color: #0b654f
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-ink)
+    }
+
+    .choice input[type=checkbox] {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--accent);
+      flex: none
     }
 
     .check {
-      font-size: 17px;
-      color: #128367
+      display: inline-flex;
+      color: var(--accent-ink)
+    }
+
+    .check .ic {
+      width: 22px;
+      height: 22px
     }
 
     .speakrow {
@@ -318,30 +512,39 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px
+      gap: 8px;
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.4
     }
 
     .speak {
       flex: none;
       width: 44px;
       height: 44px;
+      display: inline-grid;
+      place-items: center;
       border-radius: 12px;
-      border: 1px solid #c8d8da;
-      background: #fff;
-      font-size: 18px;
-      line-height: 1
+      border: 1px solid var(--field-border);
+      background: var(--surface);
+      color: var(--text-2);
+      transition: background-color .15s
+    }
+
+    .speak:hover {
+      background: var(--accent-soft)
     }
 
     .whosees {
       margin: 6px 0 10px;
       padding-left: 18px;
-      line-height: 1.5;
-      font-size: 14px;
-      color: #30566b
+      line-height: 1.55;
+      font-size: 15px;
+      color: var(--text-2)
     }
 
     .planitem+.planitem {
-      border-top: 1px solid #d5eae0;
+      border-top: 1px solid var(--soft-border);
       margin-top: 12px;
       padding-top: 4px
     }
@@ -349,51 +552,46 @@
     .planwords {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      font-size: 16px;
-      font-weight: 700;
-      color: #102d43;
+      font-size: 17px;
+      font-weight: 650;
+      color: var(--text);
       margin: 8px 0
     }
 
     .batrow {
-      background: white;
-      border: 1.5px solid #dbe5e6;
-      border-radius: 13px;
-      padding: 13px;
-      margin: 9px 0
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      margin: 10px 0
     }
 
     .batrow.missing {
-      border-color: #e0a54a;
-      background: #fffaf0
-    }
-
-    .batq {
-      color: #244253;
-      font-weight: 650;
-      line-height: 1.4
+      border-color: var(--yellow-ink);
+      background: var(--yellow-bg)
     }
 
     .yn {
       display: flex;
-      gap: 9px;
+      gap: 10px;
       margin-top: 10px
     }
 
     .ynbtn {
       flex: 1;
       min-height: 48px;
-      border: 1.5px solid #c8d8da;
-      border-radius: 11px;
-      background: white;
-      color: #204e60;
-      font-weight: 800
+      border: 1.5px solid var(--field-border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 700;
+      transition: background-color .15s, border-color .15s
     }
 
     .ynbtn[aria-pressed=true] {
-      background: #e8f6f0;
-      border-color: #0e866a;
-      color: #0b654f
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-ink)
     }
 
     .batrow .field {
@@ -402,61 +600,79 @@
 
     .field {
       width: 100%;
-      border: 1px solid #c8d8da;
-      background: white;
+      border: 1px solid var(--field-border);
+      background: var(--surface);
+      color: var(--text);
       border-radius: 12px;
-      padding: 13px;
-      color: #203f51;
+      padding: 12px 13px;
       min-height: 48px
     }
 
+    .field::placeholder {
+      color: var(--text-3);
+      opacity: 1
+    }
+
     .field:disabled {
-      background: #f1f4f4
+      background: var(--surface-2);
+      color: var(--text-2)
     }
 
     .progressbar {
       height: 6px;
-      background: #e0eae8;
+      background: var(--border);
       border-radius: 10px;
       overflow: hidden;
-      margin: 18px 0 20px
+      margin: 16px 0 20px
     }
 
     .progressbar div {
       height: 100%;
-      background: #1eab88;
-      transition: width .25s
+      background: var(--accent);
+      transition: width .2s
     }
 
     .step {
-      font-size: 12px;
-      font-weight: 800;
-      color: #207965
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-ink)
     }
 
     .pill {
       display: inline-block;
       border-radius: 30px;
-      background: #e2f3eb;
-      color: #176e58;
-      font-size: 12px;
-      font-weight: 750;
-      padding: 7px 11px
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      font-size: 13px;
+      font-weight: 650;
+      padding: 6px 11px
     }
 
     .pill.yellow {
-      background: #fff1d6;
-      color: #81550d
+      background: var(--yellow-bg);
+      color: var(--yellow-ink)
     }
 
     .pill.red {
-      background: #ffe8e4;
-      color: #9d3b2c
+      background: var(--red-bg);
+      color: var(--red-ink)
     }
 
     .pill.blue {
-      background: #e5effa;
-      color: #275b8b
+      background: var(--blue-bg);
+      color: var(--blue-ink)
+    }
+
+    .wk-green {
+      color: var(--accent-ink)
+    }
+
+    .wk-yellow {
+      color: var(--yellow-ink)
+    }
+
+    .wk-red {
+      color: var(--red-ink)
     }
 
     .tabs {
@@ -465,32 +681,39 @@
       left: 0;
       right: 0;
       display: flex;
-      background: white;
-      border-top: 1px solid #dbe7e8;
-      padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+      gap: 4px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 6px 8px max(10px, env(safe-area-inset-bottom));
       z-index: 3
     }
 
     .tab {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      min-height: 54px;
       border: 0;
       background: transparent;
-      color: #607784;
-      padding: 7px 0;
-      font-size: 11px;
-      font-weight: 800;
-      border-radius: 10px
+      color: var(--text-2);
+      padding: 6px 0;
+      font-size: 12px;
+      font-weight: 650;
+      border-radius: 12px;
+      transition: background-color .15s, color .15s
     }
 
-    .tab span {
-      display: block;
-      font-size: 21px;
-      margin-bottom: 3px
+    .tab .ic {
+      width: 22px;
+      height: 22px
     }
 
     .tab.active {
-      background: #e7f5ef;
-      color: #0d735d
+      background: var(--accent-soft);
+      color: var(--accent-ink)
     }
 
     .statrow {
@@ -500,72 +723,75 @@
     }
 
     .stat {
-      background: #fff;
-      border: 1px solid #e1eae8;
-      border-radius: 14px;
-      padding: 15px
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 15px;
+      box-shadow: var(--shadow)
     }
 
     .stat strong {
       display: block;
-      font-size: 27px;
-      color: #0d6d58
+      font-size: 28px;
+      letter-spacing: -.5px;
+      color: var(--accent-ink)
     }
 
     .stat span {
-      font-size: 12px;
-      color: #5a7480
+      font-size: 13px;
+      color: var(--text-2)
     }
 
     .banner {
-      background: #e7f3f8;
-      border-left: 4px solid #338ab0;
+      background: var(--blue-bg);
+      border-left: 4px solid var(--blue-ink);
       padding: 12px 14px;
-      border-radius: 8px;
-      font-size: 13px;
+      border-radius: 10px;
+      font-size: 14px;
       line-height: 1.5;
-      color: #30566b;
+      color: var(--blue-ink);
       margin: 14px 0
     }
 
     .bubble {
       max-width: 92%;
-      background: #dff1e8;
-      border-radius: 16px 16px 4px 16px;
-      padding: 15px;
-      color: #194d3c;
-      font-size: 14px;
+      background: var(--accent-soft);
+      border-radius: 18px 18px 4px 18px;
+      padding: 14px;
+      color: var(--text);
+      font-size: 15px;
       line-height: 1.5;
       margin: 12px 0 12px auto
     }
 
     .sms {
-      background: #e7eaf0;
-      border-radius: 16px 16px 16px 4px;
-      padding: 15px;
-      font-size: 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 18px 18px 18px 4px;
+      padding: 14px;
+      font-size: 15px;
       line-height: 1.55;
-      color: #30465a;
-      margin: 16px 0
+      color: var(--text);
+      margin: 14px 0
     }
 
     .score {
-      font-size: 45px;
-      font-weight: 850;
-      color: #117d66;
-      letter-spacing: -2px
+      font-size: 44px;
+      font-weight: 800;
+      color: var(--accent-ink);
+      letter-spacing: -1.5px
     }
 
     .bar {
       height: 9px;
-      background: #e9efef;
+      background: var(--border);
       border-radius: 10px;
       overflow: hidden
     }
 
     .bar div {
       height: 100%;
-      background: #26a887
+      background: var(--accent)
     }
 
     .metric {
@@ -575,29 +801,28 @@
     .metricline {
       display: flex;
       justify-content: space-between;
-      font-size: 13px;
+      font-size: 14px;
       margin-bottom: 6px
     }
 
     .divider {
       height: 1px;
-      background: #e2eaea;
+      background: var(--border);
       margin: 18px 0
     }
 
     .toast {
-      background: #173f50;
-      color: white;
-      padding: 11px 14px;
-      border-radius: 12px;
-      font-size: 13px;
+      background: var(--toast-bg);
+      color: var(--toast-text);
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 14px;
       margin-bottom: 12px
     }
 
     .foot {
-      font-size: 11px;
-      /* darkened for WCAG 4.5:1 */
-      color: #63767e;
+      font-size: 12px;
+      color: var(--text-3);
       text-align: center;
       padding: 12px 0 0
     }
@@ -612,19 +837,24 @@
     }
 
     .switch .btn {
-      font-size: 12px;
+      font-size: 13px;
       padding: 10px
     }
 
     .iconbubble {
-      width: 46px;
-      height: 46px;
+      width: 44px;
+      height: 44px;
       border-radius: 14px;
-      background: #dff3e9;
+      background: var(--accent-soft);
+      color: var(--accent-ink);
       display: grid;
       place-items: center;
-      font-size: 25px;
-      margin-bottom: 14px
+      margin-bottom: 12px
+    }
+
+    .iconbubble .ic {
+      width: 24px;
+      height: 24px
     }
 
     .hidden {
@@ -662,10 +892,11 @@
       }
 
       .top {
-        padding-top: max(22px, env(safe-area-inset-top))
+        padding-top: max(20px, env(safe-area-inset-top))
       }
     }
 
+    /* Short, gentle movement only; none at all when the phone asks for reduced motion. */
     @media(prefers-reduced-motion:reduce) {
 
       *,
@@ -686,7 +917,7 @@
     </div>
     <h1>
      Support that fits
-     <span style="color:#168c70">
+     <span class="accent">
       your life.
      </span>
     </h1>
@@ -696,25 +927,25 @@
     <div class="features">
      <div class="feature">
       <b>
-       ✓
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.2 4.2L19 7"/></svg>
       </b>
       Patient-led barrier assessment
      </div>
      <div class="feature">
       <b>
-       ◷
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
       </b>
       Reminders that fit changing schedules
      </div>
      <div class="feature">
       <b>
-       ♡
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
       </b>
       Kind support without blame
      </div>
      <div class="feature">
       <b>
-       ↗
+       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8"/></svg>
       </b>
       Progress, preferences, and caregiver access
      </div>
@@ -791,6 +1022,21 @@
       other: 'msgOther'
     };
     const ideasFor = b => strategyOptions[b] || [];
+    // Simple line icons drawn as inline SVG (no emoji, no icon library, no network).
+    const ICONS = {
+      check: '<path d="M5 12.5l4.2 4.2L19 7"/>',
+      checkCircle: '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16 9.6"/>',
+      circle: '<circle cx="12" cy="12" r="9"/>',
+      home: '<path d="M4 10.5L12 4l8 6.5"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+      heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+      chart: '<path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/>',
+      gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
+      mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5l7.5 5.5 7.5-5.5"/>',
+      refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.5H15"/>',
+      speaker: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/>',
+      phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>'
+    };
+    const ic = name => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
     const T = {
       en: {
         subtitle: 'Your care, your pace.',
@@ -960,6 +1206,10 @@
         retakeChanged: 'Something changed? Retake my checklist',
         textLabel: 'Check in by text reply (no data needed)',
         largeText: 'Larger text',
+        theme: 'Appearance',
+        theme_system: 'Same as my phone',
+        theme_light: 'Light',
+        theme_dark: 'Dark',
         txt_sim: 'Simulated text message — no real SMS sent',
         txt_prompt: 'how was your week? Reply 1 = going well, 2 = some bumps, 3 = hard week',
         txt_promptPlan: 'how was your week with your medicine plan? Reply 1 = going well, 2 = some bumps, 3 = hard week',
@@ -1183,6 +1433,10 @@
         textLabel: 'Responder por mensaje de texto (sin datos)',
         // Draft translation for the clinical team to review.
         largeText: 'Letra más grande',
+        theme: 'Apariencia',
+        theme_system: 'Igual que mi teléfono',
+        theme_light: 'Clara',
+        theme_dark: 'Oscura',
         txt_sim: 'Mensaje de texto simulado — no se envía ningún SMS real',
         txt_prompt: '¿cómo te fue esta semana? Responde 1 = bien, 2 = algunos problemas, 3 = semana difícil',
         txt_promptPlan: '¿cómo te fue esta semana con tu plan de medicina? Responde 1 = bien, 2 = algunos problemas, 3 = semana difícil',
@@ -1317,7 +1571,7 @@
     const header = (eyebrow, title, desc) =>
       `<div class="hero">${eyebrow}</div><h2>${title}</h2><p class="muted">${desc}</p>`;
     const choices = (keys, selected, multi) => keys.map(k =>
-      `<button class="choice" aria-pressed="${multi?selected.includes(k):selected===k}" data-pick="${k}" data-multi="${multi?1:0}"><span>${esc(t(k))}</span><span class="check">${(multi?selected.includes(k):selected===k)?'✓':'○'}</span></button>`
+      `<button class="choice" aria-pressed="${multi?selected.includes(k):selected===k}" data-pick="${k}" data-multi="${multi?1:0}"><span>${esc(t(k))}</span><span class="check">${(multi?selected.includes(k):selected===k)?ic('checkCircle'):ic('circle')}</span></button>`
       ).join('');
     const foot = () => `<div class="foot">${t('footer')}</div>`;
     const todayKey = () => new Date().toLocaleDateString('en-CA');
@@ -1338,7 +1592,7 @@
       }
     }
     const speakBtn = text => voiceFor() ?
-      `<button type="button" class="speak" data-speak="${esc(text)}" aria-label="${esc(t('readAloud'))}" title="${esc(t('readAloud'))}">🔊</button>` : '';
+      `<button type="button" class="speak" data-speak="${esc(text)}" aria-label="${esc(t('readAloud'))}" title="${esc(t('readAloud'))}">${ic('speaker')}</button>` : '';
 
     function speak(text) {
       const v = voiceFor();
@@ -1376,7 +1630,7 @@
       if (!isOwner() || !s.textCheckin) return '';
       const msgs = deapView?.textReplies || [];
       const prompt = hi() + t(isDiscreet() ? 'txt_prompt' : 'txt_promptPlan');
-      return `<div class="card" id="textThread"><div class="small">📱 ${t('txt_sim')}</div><div class="sms">${esc(prompt)}</div>${msgs.map(m=>`<div class="bubble">${esc(m.body)}</div><div class="sms">${esc(m.reply)}</div>`).join('')}<div class="btnrow">${['1','2','3'].map(n=>`<button class="btn secondary" data-text="${n}">${n}</button>`).join('')}</div><div style="display:flex;gap:8px;margin-top:9px"><input id="textBody" class="field" maxlength="160" placeholder="${esc(t('txt_typePh'))}"><button class="btn outline" data-text-send style="width:auto">${t('txt_send')}</button></div></div>`
+      return `<div class="card" id="textThread"><div class="small">${ic('phone')} ${t('txt_sim')}</div><div class="sms">${esc(prompt)}</div>${msgs.map(m=>`<div class="bubble">${esc(m.body)}</div><div class="sms">${esc(m.reply)}</div>`).join('')}<div class="btnrow">${['1','2','3'].map(n=>`<button class="btn secondary" data-text="${n}">${n}</button>`).join('')}</div><div style="display:flex;gap:8px;margin-top:9px"><input id="textBody" class="field" maxlength="160" placeholder="${esc(t('txt_typePh'))}"><button class="btn outline" data-text-send style="width:auto">${t('txt_send')}</button></div></div>`
     }
 
     async function sendText(body) {
@@ -1408,7 +1662,7 @@
     function recheckCard() {
       const r = myRecheck();
       if (!r || !r.due) return '';
-      return `<div class="card soft" id="recheckCard"><div class="iconbubble">↻</div><h3>${t('recheckTitle')}</h3><p class="muted">${t('recheckDesc')}</p>${btn(t('recheckBtn'),'retake')}</div>`
+      return `<div class="card soft" id="recheckCard"><div class="iconbubble">${ic('refresh')}</div><h3>${t('recheckTitle')}</h3><p class="muted">${t('recheckDesc')}</p>${btn(t('recheckBtn'),'retake')}</div>`
     }
 
     // Start a NEW assessment: fresh answers and a new batId. Earlier answers stay in the server history.
@@ -1535,7 +1789,7 @@
         answer: '',
         note: ''
       };
-      return `<div class="card" id="checkBack"><div class="iconbubble">✓</div><div class="speakrow"><h3>${t('checkTitle')}</h3>${speakBtn([t('checkTitle'), p.patientText, t('check_working'), t('check_not_really'), t('check_change')].join('. '))}</div><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?'✓':'○'}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
+      return `<div class="card" id="checkBack"><div class="iconbubble">${ic('check')}</div><div class="speakrow"><h3>${t('checkTitle')}</h3>${speakBtn([t('checkTitle'), p.patientText, t('check_working'), t('check_not_really'), t('check_change')].join('. '))}</div><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?ic('checkCircle'):ic('circle')}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
     }
 
     // A kind word when the care team marked a plan "Working" (keep checking). Only plans this person
@@ -1668,7 +1922,7 @@
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        recheckCard() + textThread() + checkBackCard() + workingCard() + myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        recheckCard() + textThread() + checkBackCard() + workingCard() + myPlans() + `<div class="card"><div class="iconbubble">${ic('heart')}</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?ic('check')+' '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
@@ -1687,20 +1941,33 @@
       // Latest weekly answer, from the app or by text reply.
       const last = allWeekly().at(-1);
       return header(t('eb_journey'), t('progressTitle'), t('progressDesc')) +
-        `<div class="statrow">${checkedDays?`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><strong>${checkedDays}</strong><span>${t('daysCheckedIn')} · ${t('last30')}</span></div>`:`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><span style="font-size:15px">${t('checkinsEmpty')}</span></div>`}<div class="stat" style="grid-column:1/-1"><strong id="latestWeekly" style="color:${last?.status==='yellow'?'#81550d':last?.status==='red'?'#9d3b2c':'#0d6d58'}${last?'':';font-size:17px'}">${last?t(last.status).split(' — ')[0]:t('noWeekly')}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><p id="missedOk" style="margin-top:0">${t('missedOk')}</p><p class="small" style="margin-bottom:0">${t('progressDesc')}</p></div>${myPlans()}<div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
+        `<div class="statrow">${checkedDays?`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><strong>${checkedDays}</strong><span>${t('daysCheckedIn')} · ${t('last30')}</span></div>`:`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><span style="font-size:15px">${t('checkinsEmpty')}</span></div>`}<div class="stat" style="grid-column:1/-1"><strong id="latestWeekly" class="wk-${last?.status==='yellow'?'yellow':last?.status==='red'?'red':'green'}"${last?'':' style="font-size:17px"'}>${last?t(last.status).split(' — ')[0]:t('noWeekly')}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><p id="missedOk" style="margin-top:0">${t('missedOk')}</p><p class="small" style="margin-bottom:0">${t('progressDesc')}</p></div>${myPlans()}<div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
         foot()
     }
 
     function settings() {
       return header(t('eb_space'), t('settingsTitle'), t('personalizeDesc')) +
         // With a personal link, who is answering comes from the link: no name fields, no role switch.
-        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}${s.role!=='caregiver'?`<label class="choice" style="font-size:13px"><span>${t('discreetLabel')}</span><input id="discreet" type="checkbox" ${isDiscreet()?'checked':''}></label>`:''}<label class="choice" style="font-size:13px"><span>${t('largeText')}</span><input id="largeText" type="checkbox" ${s.largeText?'checked':''}></label>${isOwner()?`<label class="choice" style="font-size:13px"><span>${t('textLabel')}</span><input id="textCheckin" type="checkbox" ${s.textCheckin?'checked':''}></label>`:''}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${bat_done()?btn(t('retakeChanged'),'retake','secondary'):''}<div style="height:9px"></div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
+        `<div class="card">${INVITE?`<p id="youAre"><b>${t('youAre')}:</b> ${esc(s.role==='caregiver'?s.caregiverName+' · '+t('caregiverFor')+' '+s.patientName:s.patientName)}</p>`:`<label class="label" for="patientName">${t('patientNameLabel')}</label><input class="field" id="patientName" maxlength="45" value="${esc(s.patientName)}"><label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" value="${esc(s.caregiverName)}">`}${prefs()}${s.role!=='caregiver'?`<label class="choice" style="font-size:13px"><span>${t('discreetLabel')}</span><input id="discreet" type="checkbox" ${isDiscreet()?'checked':''}></label>`:''}<label class="label" for="theme">${t('theme')}</label><select id="theme" class="field">${['system','light','dark'].map(x=>`<option value="${x}" ${(s.theme||'system')===x?'selected':''}>${t('theme_'+x)}</option>`).join('')}</select><label class="choice" style="font-size:13px"><span>${t('largeText')}</span><input id="largeText" type="checkbox" ${s.largeText?'checked':''}></label>${isOwner()?`<label class="choice" style="font-size:13px"><span>${t('textLabel')}</span><input id="textCheckin" type="checkbox" ${s.textCheckin?'checked':''}></label>`:''}<div class="divider"></div><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div><div style="height:14px"></div>${btn(t('save'),'savePrefs')}</div>${INVITE?whoSeesCard():`<div class="card"><h3>${t('role')}</h3>${choices(['self','caregiver'],s.role,false)}</div>`}${bat_done()?btn(t('retakeChanged'),'retake','secondary'):''}<div style="height:9px"></div>${btn(t('reset'),'reset','outline')}<p class="small">${t('emergency')}</p>` +
         foot()
     }
+
+    // Light or dark: follow the phone ("System", the default) unless Light or Dark is chosen.
+    function applyTheme() {
+      const th = s.theme === 'light' || s.theme === 'dark' ? s.theme : '';
+      if (th) document.documentElement.dataset.theme = th;
+      else delete document.documentElement.dataset.theme;
+      const dark = th === 'dark' || (!th && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#08111a' : '#0f2333')
+    }
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme())
+    } catch (e) {}
 
     function render() {
       document.documentElement.lang = s.lang;
       document.querySelector('.phone')?.classList.toggle('large', !!s.largeText);
+      applyTheme();
       document.getElementById('lang').textContent = s.lang === 'en' ? 'ESPAÑOL' : 'ENGLISH';
       document.getElementById('subtitle').textContent = t('subtitle');
       // Discreet mode: the app header and tab title are neutral too.
@@ -1715,9 +1982,9 @@
       }
       if (s.view === 'sms') html += isDiscreet() ?
         // Discreet invite preview: what shows on a lock screen, with no medical words.
-        `<div class="iconbubble">✉</div>${header(esc(t('d_appName')).toUpperCase(),t('d_smsTitle'),t('privacy'))}<div class="sms" id="smsPreview">${esc(hi()+t('d_smsText'))}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('d_smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
+        `<div class="iconbubble">${ic('mail')}</div>${header(esc(t('d_appName')).toUpperCase(),t('d_smsTitle'),t('privacy'))}<div class="sms" id="smsPreview">${esc(hi()+t('d_smsText'))}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('d_smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
         foot() :
-        `<div class="iconbubble">✉</div>${header('KTx-CONNECT',t('smsTitle'),t('privacy'))}<div class="sms" id="smsPreview">${t('smsText')}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
+        `<div class="iconbubble">${ic('mail')}</div>${header('KTx-CONNECT',t('smsTitle'),t('privacy'))}<div class="sms" id="smsPreview">${t('smsText')}<div class="small" style="margin-top:8px">Today · 9:41 AM</div></div>${btn(t('smsButton'),'start')}<div class="banner">${t('privacy')}</div>` +
         foot();
       else if (s.view === 'onboard') html += onboarding();
       else if (s.view === 'today') html += today();
@@ -1725,13 +1992,13 @@
         `<div class="card soft"><h3>${t('support')}</h3><p>${t('missText')}</p>${btn(t('contact'),'contact')}</div>${btn(t('backToday'),'today','secondary')}` +
         foot();
       else if (s.view === 'done') html +=
-        `<div class="iconbubble">✓</div>${header(t('eb_thanks'),t('done'),t('doneSub'))}${btn(t('backToday'),'today')}` +
+        `<div class="iconbubble">${ic('check')}</div>${header(t('eb_thanks'),t('done'),t('doneSub'))}${btn(t('backToday'),'today')}` +
         foot();
       else if (s.view === 'weekly') html += weekly();
       else if (s.view === 'weeklyDone') {
         const last = s.weekly.at(-1);
         html +=
-          `<div class="iconbubble">♡</div>${header(t('eb_checkin'),t('thanks'),t('thanksDesc'))}<div class="card"><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${t(last?.status||'green')}</span><p>${t('swap')}</p>${btn(t('contact'),'contact','outline')}</div>${btn(t('backToday'),'today')}` +
+          `<div class="iconbubble">${ic('heart')}</div>${header(t('eb_checkin'),t('thanks'),t('thanksDesc'))}<div class="card"><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${t(last?.status||'green')}</span><p>${t('swap')}</p>${btn(t('contact'),'contact','outline')}</div>${btn(t('backToday'),'today')}` +
           foot()
       } else if (s.view === 'progress') html += progress();
       else if (s.view === 'settings') html += settings();
@@ -1741,7 +2008,7 @@
         s.view);
       tabs.classList.toggle('hidden', !show);
       tabs.innerHTML = show ? ['today', 'weekly', 'progress', 'settings'].map((k, i) =>
-        `<button class="tab ${s.view===k||(k==='today'&&['missed','done'].includes(s.view))||(k==='weekly'&&s.view==='weeklyDone')?'active':''}" data-action="${k}" aria-label="${t(k)}"><span aria-hidden="true">${['⌂','♡','▥','⚙'][i]}</span>${t(k)}</button>`
+        `<button class="tab ${s.view===k||(k==='today'&&['missed','done'].includes(s.view))||(k==='weekly'&&s.view==='weeklyDone')?'active':''}" data-action="${k}" aria-label="${t(k)}">${ic(['home','heart','chart','gear'][i])}${t(k)}</button>`
         ).join('') : '';
     }
 
@@ -1979,6 +2246,12 @@
         render();
         return
       }
+      if (id === 'theme') {
+        s.theme = e.target.value;
+        save();
+        render();
+        return
+      }
       if (id === 'shift') s.shift = e.target.checked;
       if (id === 'channel') s.channel = e.target.value;
       if (id === 'tone') s.tone = e.target.value;
@@ -2016,8 +2289,7 @@
     const deapBanner = document.createElement('div');
     deapBanner.id = 'deapConnection';
     deapBanner.setAttribute('role', 'status');
-    deapBanner.style.cssText =
-      'display:inline-block;margin-top:10px;padding:5px 10px;border-radius:20px;background:#e4f5eb;color:#165b46;font:600 11px system-ui';
+    deapBanner.className = 'conn';
     deapBanner.textContent = 'Connecting to care-team demo…';
     // In the header (not floating), so it can never sit on top of the footer text or tab bar.
     document.querySelector('.top').appendChild(deapBanner);
@@ -2027,9 +2299,9 @@
       'Your care team has not added a follow-up note yet.';
 
     function deapStatus(ok) {
-      deapBanner.textContent = ok ? '● Connected to care-team demo' :
-      '○ Offline — saved on this device';
-      deapBanner.style.background = ok ? '#e4f5eb' : '#fff2d8';
+      deapBanner.textContent = ok ? 'Connected to care-team demo' :
+      'Offline — saved on this device';
+      deapBanner.className = ok ? 'conn' : 'conn off';
     }
 
     function deapPush() {
@@ -2089,8 +2361,8 @@
           cache: 'no-store'
         });
         if (INVITE && r.status === 404) {
-          deapBanner.textContent = '○ ' + t('badLink');
-          deapBanner.style.background = '#fff2d8';
+          deapBanner.textContent = t('badLink');
+          deapBanner.className = 'conn off';
           return
         }
         // Server no longer has this patient (e.g. demo database was reset): send state again.
@@ -2151,7 +2423,8 @@
           box.innerHTML = s.lang === 'es' ?
             '<h3>Seguimiento del equipo</h3><p id="deapCarePlan"></p><p class="small">Para preguntas médicas, contacta a tu equipo de trasplante.</p>' :
             '<h3>Care-team follow-up</h3><p id="deapCarePlan"></p><p class="small">Updates from your care team appear here in this demo. For medical questions, contact your transplant team.</p>';
-          screen.appendChild(box);
+          // Above the footer line, not after it.
+          screen.insertBefore(box, screen.querySelector(':scope > .foot'));
           document.getElementById('deapCarePlan').textContent = deapCarePlan || deapNoNote();
         }
       }
