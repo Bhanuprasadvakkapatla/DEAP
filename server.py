@@ -1120,6 +1120,11 @@ def derive(row, c, chart=False):
     open_requests = total_requests - handled
     if open_requests:
         reasons.append("Support requested")
+    # "Ran out of medicine" = Yes: listed in the Attention queue until its task has a plan (colour unchanged).
+    for t in c.execute(
+        "SELECT owner_role FROM tasks WHERE patient_id=? AND barrier='ranout' AND status='needs_plan'", (pid,)
+    ):
+        reasons.append(f"Ran out of medicine. {t['owner_role']} to follow up.")
     if state.get("silence"):
         reasons.append("Demo silence flag")
     if stage in ("caregiver_notice", "clinician_review"):

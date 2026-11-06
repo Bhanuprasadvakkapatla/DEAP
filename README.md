@@ -58,7 +58,7 @@ Patient data is saved to the browser's localStorage and synchronized to the SQLi
 
 ### Barrier owners and worklist
 
-Each barrier has a named owner (packet page 5), set in `BARRIER_OWNERS` in `server.py`. This mapping is site-specific; each center can change it. When a patient finishes the 14 BAT items, the server creates one open task per "yes" barrier in the `tasks` table (clinician-owned, separate from the patient's synced state). The clinician **My worklist** view shows open tasks for a chosen role ("Viewing as").
+Each barrier has a named owner (packet page 5), set in `BARRIER_OWNERS` in `server.py`. This mapping is site-specific; each center can change it. When a patient finishes the 14 BAT items, the server creates one open task per "yes" barrier in the `tasks` table (clinician-owned, separate from the patient's synced state). The clinician **My worklist** view shows open tasks for a chosen role ("Viewing as"). A "yes" to *Ran out of medicine* also lists the patient in the **Attention queue** ("Ran out of medicine. Social worker to follow up.", naming whoever owns it at this center). The patient's colour does not change, and the entry clears when a plan is saved for that task.
 
 ### Plans and check-backs (MAPS steps 4–5)
 

@@ -943,7 +943,7 @@
       const filtered = patients.filter(p => (filter === 'all' || p.status === filter) &&
         `${p.patientName} ${p.caregiverName}`.toLowerCase().includes(search.toLowerCase()));
       return stats() + `<h2>${view==='attention'?'Prioritized follow-up':'Patient roster'}</h2>` +
-        table(view === 'attention' ? filtered.filter(p => ['red', 'yellow'].includes(p.status)).sort((a,
+        table(view === 'attention' ? filtered.filter(p => ['red', 'yellow'].includes(p.status) || (p.attentionReasons || []).length).sort((a,
           b) => (a.status === 'red' ? -1 : 1) - (b.status === 'red' ? -1 : 1)) : filtered)
     }
 
