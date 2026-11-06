@@ -739,6 +739,8 @@
       center = {},
       outsidePartner = 'Outside partner (e.g., regional telehealth)',
       centerDraft = null,
+      // Insights & reports measures from the server (/api/reports).
+      reportData = null,
       view = 'overview',
       selected = null,
       search = '',
@@ -949,18 +951,21 @@
       return `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:20px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><div class="detail"><div class="panel"><h2>Assessment & preferences</h2><div class="list"><div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div>${recheckItem(p)}<div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div>${ownWords(p)?`<div class="item"><small>In the patient's own words</small><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>`:''}<div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div></div><div class="panel"><h2>Engagement & alerts</h2><div class="list"><div class="item"><small>Reported medication check-ins</small><strong>${daily.length} recorded</strong></div><div class="item"><small>Latest weekly response</small><strong>${last?esc(last.status.toUpperCase()):'No response'}</strong>${last?.via==='text'?'<span class="meta" id="lastViaText"> via text reply</span>':''}<div>${esc(last?.note||'')}</div></div><div class="item"><small>Care-team contact requests</small><strong>${p.openRequests||0} open · ${p.contactRequests||0} total</strong><div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap"><button id="markHandled" class="button small" ${p.openRequests?'':'disabled'}>Mark request handled</button><span id="handledResult" class="muted" role="status"></span></div></div><div class="item"><small>Simulated silence</small><strong>${p.silence?'Flagged':'Not flagged'}</strong></div></div></div>${familyPanel(p)}${chartPanel(p)}<div class="panel full"><h2>Plan for each barrier</h2><p class="muted">One concrete plan per barrier, made with the patient.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Demo only. Moves this patient's check-back clock so check-backs come due; real time is not changed.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="list" id="patientTasks">${(()=>{const mine=tasks.filter(t=>t.patientId===p.id).sort((a,b)=>b.isPrimary-a.isPrimary);return mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'})()}</div></div><div class="panel full"><h2>Care-team follow-up note</h2><p class="muted">This demo note is shared back to the patient's Today screen. Do not enter real patient information or medical instructions.</p><label for="carePlan" class="muted">Follow-up message</label><textarea id="carePlan" maxlength="1200" placeholder="Example: We will review your reminder routine together at your next check-in.">${esc(p.carePlan||'')}</textarea><div style="display:flex;align-items:center;gap:12px;margin-top:12px"><button id="savePlan" class="button">Save & share with patient</button><span id="saveResult" class="muted" role="status"></span></div></div><div class="panel full"><h2>Recent weekly check-ins</h2><div class="list">${w.length?w.slice(-8).reverse().map(x=>`<div class="item"><strong>${esc((x.status||'').toUpperCase())} · ${shortDate(x.date)}${x.via==='text'?' · via text reply':''}</strong><div>${esc(x.note||'No comment')}</div></div>`).join(''):'<p class="muted">No check-ins yet.</p>'}</div></div></div>`
     }
 
+    // Measures that show whether the loop works (packet page 6), computed on the server.
     function reports() {
-      const total = patients.length || 1;
-      const counts = {};
-      patients.forEach(p => (p.barriers || []).forEach(b => counts[b] = (counts[b] || 0) + 1));
-      const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-      const recent = patients.flatMap(p => (p.weekly || []).map(w => ({
-        ...w,
-        patient: p.patientName
-      }))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-      return stats() +
-        `<div class="detail"><div class="panel"><h2>Reported barrier prevalence</h2><p class="muted">Counts from fictional demo patients only; not clinical research.</p><div class="bars">${ranked.map(([k,n])=>`<div class="barrow wide"><span>${esc(names[k]||k)}</span><div class="track"><div class="fill" style="width:${100*n/total}%"></div></div><strong>${n}</strong></div>`).join('')}</div></div><div class="panel"><h2>Recent weekly responses</h2><div class="list">${recent.map(x=>`<div class="item"><strong>${esc(x.patient)} · ${esc(x.status.toUpperCase())}</strong><small>${shortDate(x.date)}</small></div>`).join('')}</div></div></div><div class="panel"><h2>Strategy use (synthetic cohort)</h2><div class="bars">${Object.keys(strategyNames).map(k=>{const n=patients.filter(p=>(p.strategies||[]).includes(k)).length;return `<div class="barrow wide"><span>${esc(strategyNames[k])}</span><div class="track"><div class="fill" style="width:${100*n/total}%"></div></div><strong>${n}</strong></div>`}).join('')}</div><p class="muted">These figures show selections, not proven intervention effectiveness.</p></div>`
+      const r = reportData;
+      if (!r) return '<p class="muted">Loading…</p>';
+      const pct = (n, d) => d ? Math.round(100 * n / d) + '%' : '—';
+      const stat = (id, label, value, sub) => `<div class="card" id="${id}"><div class="muted">${label}</div><div class="number">${value}</div><div class="meta">${sub}</div></div>`;
+      const f = r.followups,
+        nc = r.noCall,
+        lv = r.levels;
+      const ownerRows = Object.entries(r.ownerWork).sort((a, b) => a[0].localeCompare(b[0])).map(([role, o]) => `<tr data-owner="${esc(role)}"><td>${esc(role)}</td><td>${o.needs_plan}</td><td>${o.plan_agreed}</td><td>${o.keep_checking}</td><td><strong>${o.needs_plan+o.plan_agreed+o.keep_checking}</strong></td></tr>`).join('');
+      const reported = Object.entries(r.reported).sort((a, b) => b[1] - a[1]);
+      const maxN = Math.max(1, ...reported.map(([, n]) => n));
+      return `<p class="alert" id="reportsNote">Fictional demo data. These measures show how the team would track whether the program works.</p><div class="cards">${stat('repResolved','Barriers resolved',`${r.barriers.resolved} of ${r.barriers.total}`,`${pct(r.barriers.resolved,r.barriers.total)} of barriers have a plan marked “Working” (now Keep checking)`)}${stat('repFollowups','Follow-ups completed on time',`${f.onTime} of ${f.onTime+f.late}`,`${f.late} late · ${f.overdue} still overdue`)}${stat('repNoCall','Answered without a phone call',`${nc.patientCheckbacks+nc.caregiverCheckbacks+nc.textReplies}`,`${nc.patientCheckbacks} patient + ${nc.caregiverCheckbacks} caregiver check-back answers in the app · ${nc.textReplies} weekly answers by text reply`)}${stat('repLevels','Steadier drug levels',`${lv.steady} of ${lv.steady+lv.unsteady}`,`patients whose spread of the last 4 tacrolimus levels is at or below ${lv.threshold} · ${lv.unsteady} above · ${lv.noData} without 4 draws`)}</div><div class="panel"><h2>Open work by owner</h2><p class="muted">Open barrier tasks per role, after Center setup routing.</p><div class="scroll"><table id="ownerWork"><thead><tr><th>Owner</th><th>Needs a plan</th><th>Plan agreed</th><th>Keep checking</th><th>Total</th></tr></thead><tbody>${ownerRows||'<tr><td colspan="5" class="muted">No open tasks.</td></tr>'}</tbody></table></div></div><div class="panel"><h2>Barriers reported</h2><p class="muted">How many patients reported each barrier (Barriers Assessment Tool wording).</p><div class="bars" id="barriersReported">${reported.map(([k,n])=>`<div class="barrow wide"><span>${esc(names[k]||k)}</span><div class="track"><div class="fill" style="width:${100*n/maxN}%"></div></div><strong>${n}</strong></div>`).join('')}</div></div>`
     }
+
 
     // Role the worklist is viewed as; remembered in this browser only.
     let worklistRole = 'all';
@@ -1170,12 +1175,15 @@
     }
     async function refresh() {
       try {
-        const [r, rt] = await Promise.all([fetch('/api/patients', {
+        const [r, rt, rr] = await Promise.all([fetch('/api/patients', {
           cache: 'no-store'
         }), fetch('/api/tasks', {
           cache: 'no-store'
+        }), fetch('/api/reports', {
+          cache: 'no-store'
         })]);
-        if (!r.ok || !rt.ok) throw Error('API error');
+        if (!r.ok || !rt.ok || !rr.ok) throw Error('API error');
+        reportData = await rr.json();
         patients = (await r.json()).patients;
         const td = await rt.json();
         tasks = td.tasks;

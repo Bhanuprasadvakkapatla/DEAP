@@ -187,6 +187,11 @@ def init():
             c.execute("ALTER TABLE tasks ADD COLUMN home_role TEXT")
         for r in c.execute("SELECT id, barrier FROM tasks WHERE home_role IS NULL").fetchall():
             c.execute("UPDATE tasks SET home_role=? WHERE id=?", (BARRIER_OWNERS.get(r["barrier"], ""), r["id"]))
+        # Completed follow-ups (owner chose Working / Not working / Adjust), with the due date
+        # they answered, so reports can show on time vs late. done_at uses the patient's demo clock.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS followups (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, patient_id TEXT NOT NULL, barrier TEXT NOT NULL, due_date TEXT, done_at TEXT NOT NULL, outcome TEXT NOT NULL)"
+        )
         # Center setup: which owner roles are on staff and where the others' tasks go.
         c.execute(
             "CREATE TABLE IF NOT EXISTS center_roles (role TEXT PRIMARY KEY, on_staff INTEGER NOT NULL DEFAULT 1, route_to TEXT)"
@@ -341,6 +346,57 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
         )
     event(c, fid, "enrolled", f"Family enrolled (age {age}, {LEADS_NAMES[leads or default_leads(age)]}); personal links created")
     return fid
+
+
+def reports(c):
+    """Measures that show whether the loop works (packet page 6), from the server tables.
+    Fictional demo data only; no clinical outcome is claimed."""
+    active = c.execute(
+        "SELECT patient_id, barrier, owner_role, status, due_date FROM tasks WHERE status IN ('needs_plan','plan_agreed','keep_checking')"
+    ).fetchall()
+    resolved = sum(t["status"] == "keep_checking" for t in active)
+    # Follow-ups: completed on or before the due day vs late; and those still overdue now.
+    on_time = late = 0
+    for f in c.execute("SELECT due_date, done_at FROM followups").fetchall():
+        if f["due_date"] and f["done_at"][:10] > f["due_date"][:10]:
+            late += 1
+        else:
+            on_time += 1
+    overdue = 0
+    for t in active:
+        if t["status"] != "needs_plan" and t["due_date"]:
+            today = (NOW() + timedelta(days=clock_days(c, t["patient_id"]))).date().isoformat()
+            overdue += t["due_date"][:10] < today
+    events = c.execute("SELECT message FROM events WHERE kind='check_back'").fetchall()
+    by_patient = sum(e["message"].startswith("Patient") for e in events)
+    by_caregiver = sum(e["message"].startswith("Caregiver") for e in events)
+    texts = c.execute("SELECT COUNT(*) FROM text_replies WHERE status IS NOT NULL").fetchone()[0]
+    # Drug-level steadiness from the chart (spread of the last 4 tacrolimus levels).
+    steady = unsteady = no_data = 0
+    for r in c.execute("SELECT id FROM patients").fetchall():
+        sp = chart_signals(c, r["id"])["spread"]
+        if sp is None:
+            no_data += 1
+        elif sp <= TAC_SD:
+            steady += 1
+        else:
+            unsteady += 1
+    owners = {}
+    for t in active:
+        o = owners.setdefault(t["owner_role"], {"needs_plan": 0, "plan_agreed": 0, "keep_checking": 0})
+        o[t["status"]] += 1
+    reported = {}
+    for r in c.execute("SELECT state FROM patients").fetchall():
+        for b in json.loads(r["state"]).get("barriers", []):
+            reported[b] = reported.get(b, 0) + 1
+    return {
+        "barriers": {"total": len(active), "resolved": resolved},
+        "followups": {"onTime": on_time, "late": late, "overdue": overdue},
+        "noCall": {"patientCheckbacks": by_patient, "caregiverCheckbacks": by_caregiver, "textReplies": texts},
+        "levels": {"steady": steady, "unsteady": unsteady, "noData": no_data, "threshold": TAC_SD},
+        "ownerWork": owners,
+        "reported": reported,
+    }
 
 
 def save_center(c, data):
@@ -839,6 +895,14 @@ def seed_plans(c):
         }
     }
     c.execute("UPDATE patients SET state=? WHERE id='demo-08'", (json.dumps(st),))
+    log_checkbacks(c, "demo-08", {}, st["checkbacks"])
+    # Morgan's plan was checked back on its due day and marked Working (now Keep checking).
+    m = c.execute("SELECT id FROM tasks WHERE patient_id='demo-06' AND barrier='embarrass'").fetchone()
+    on_day = iso(now - timedelta(days=6))
+    c.execute(
+        "INSERT INTO followups(task_id,patient_id,barrier,due_date,done_at,outcome) VALUES (?,?,?,?,?,'working')",
+        (m["id"], "demo-06", "embarrass", on_day, on_day),
+    )
 
 
 def event(c, pid, kind, message):
@@ -1333,6 +1397,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.json(
                 {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False}
             )
+        if path == "/api/reports":
+            with LOCK, db() as c:
+                data = reports(c)
+            return self.json(data)
         im = re.fullmatch(r"/api/invite/([A-Za-z0-9_-]{8,64})", path)
         if im:
             with LOCK, db() as c:
@@ -1554,6 +1622,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not current or t["status"] == "needs_plan":
                 return {"error": "This barrier has no plan to review yet"}, 409
             b = t["barrier"]
+            # Record the completed follow-up and its due date, to report on-time vs late.
+            c.execute(
+                "INSERT INTO followups(task_id,patient_id,barrier,due_date,done_at,outcome) VALUES (?,?,?,?,?,?)",
+                (task_id, pid, b, t["due_date"], iso(clock_now), outcome),
+            )
             if outcome == "working":
                 # Durability phase: keep the plan, check again later.
                 due = clock_now + timedelta(days=DURABILITY_DAYS)
