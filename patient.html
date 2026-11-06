@@ -853,6 +853,8 @@
         yes: 'Yes',
         no: 'No',
         answerAll: 'Please answer Yes or No for each one.',
+        batKind: 'There are no wrong answers. Lots of people find parts of this hard. Your answers help your team help you, and nobody will be in trouble.',
+        batKindCg: 'There are no wrong answers. Lots of families find parts of this hard. Your answers help your team help your child, and nobody will be in trouble.',
         forget: 'Forgetting to take them or bring them with you',
         taste: 'Hate the taste',
         swallow: 'Hard to swallow pills',
@@ -1071,6 +1073,9 @@
         yes: 'Sí',
         no: 'No',
         answerAll: 'Responde Sí o No en cada una.',
+        // Kind note before the checklist: draft translation for the clinical team to review.
+        batKind: 'No hay respuestas incorrectas. A mucha gente se le hacen difíciles algunas de estas cosas. Tus respuestas ayudan a tu equipo a ayudarte, y nadie se va a meter en problemas.',
+        batKindCg: 'No hay respuestas incorrectas. A muchas familias se les hacen difíciles algunas de estas cosas. Tus respuestas ayudan a tu equipo a ayudar a tu hijo o hija, y nadie se va a meter en problemas.',
         forget: 'Se me olvida tomarlas o llevarlas conmigo',
         taste: 'Odio el sabor',
         swallow: 'Me cuesta tragar las pastillas',
@@ -1514,7 +1519,9 @@
         (s.role === 'caregiver' ?
           `<label class="label" for="caregiverName">${t('caregiverNameLabel')}</label><input class="field" id="caregiverName" maxlength="45" autocomplete="off" value="${esc(s.caregiverName)}" placeholder="${esc(t('caregiverNameLabel'))}">` :
           '') + `<p class="small">${t('nameHint')}</p>`;
-      if (step === 1) out += header(eyebrow, t('barrierTitle'), t('barrierDesc')) + batList();
+      // A kind note first: people tend to under-report barriers. The 14 questions are unchanged.
+      if (step === 1) out += header(eyebrow, t('barrierTitle'), t('barrierDesc')) +
+        `<div class="card soft" id="batKind"><div class="speakrow"><p style="margin:0">${t(s.role==='caregiver'?'batKindCg':'batKind')}</p>${speakBtn(t(s.role==='caregiver'?'batKindCg':'batKind'))}</div></div>` + batList();
       if (step === 2) out += header(eyebrow, t('primaryTitle'), t('primaryDesc')) + choices(s
         .barriers, s.primary, false);
       if (step === 3) out += header(eyebrow, t('strategyTitle'),
