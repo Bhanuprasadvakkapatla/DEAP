@@ -517,45 +517,6 @@
       color: #5a7480
     }
 
-    .days {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 6px
-    }
-
-    .day {
-      aspect-ratio: 1;
-      border-radius: 9px;
-      background: #e8eff0;
-      display: grid;
-      place-items: center;
-      font-size: 11px;
-      font-weight: 750;
-      color: #56707d
-    }
-
-    /* A day with a check-in gets a positive mark; a day without one stays neutral. */
-    .day {
-      position: relative
-    }
-
-    .day.done {
-      background: #b9e8d6;
-      color: #155b4a
-    }
-
-    .day.done::after {
-      content: '✓';
-      position: absolute;
-      top: 1px;
-      right: 4px;
-      font-size: 10px
-    }
-
-    .day.empty {
-      background: #edf2f3
-    }
-
     .banner {
       background: #e7f3f8;
       border-left: 4px solid #338ab0;
@@ -948,8 +909,6 @@
         progressDesc: 'These numbers show your check-ins in this demo, not a medical score.',
         daysCheckedIn: 'Days you checked in',
         checkinsEmpty: 'Your check-ins will show up here.',
-        checkedIn: 'Checked in',
-        noCheckin: 'No check-in',
         missedOk: "Missed a day? That's okay. Tell us what got in the way.",
         last30: 'In the last 30 days',
         weekResult: 'Latest weekly answer',
@@ -1170,8 +1129,6 @@
         // Progress text: draft translation for the clinical team to review.
         daysCheckedIn: 'Días que respondiste',
         checkinsEmpty: 'Aquí aparecerán tus respuestas.',
-        checkedIn: 'Respondiste',
-        noCheckin: 'Sin respuesta',
         missedOk: '¿Se te pasó un día? Está bien. Cuéntanos qué te lo impidió.',
         last30: 'En los últimos 30 días',
         weekResult: 'Última respuesta semanal',
@@ -1702,21 +1659,13 @@
     }
 
     function progress() {
-      // No scoreboard: one positive count, and no streaks, points or badges. Any check-in counts,
-      // including telling us about a missed dose. Days without a check-in stay neutral.
-      const recent = s.daily.filter(x => x.date >= dateBefore(29));
-      const checkedDays = recent.length;
-      const days = Array.from({
-        length: 30
-      }, (_, i) => {
-        const date = dateBefore(29 - i);
-        const rec = recent.find(x => x.date === date);
-        return `<div class="day ${rec?'done':'empty'}" title="${date}" aria-label="${date}: ${esc(t(rec?'checkedIn':'noCheckin'))}">${new Date(date+'T12:00:00').getDate()}</div>`
-      }).join('');
+      // No scoreboard: one positive count, and no calendar, streaks, points or badges. Any check-in
+      // counts, including telling us about a missed dose.
+      const checkedDays = s.daily.filter(x => x.date >= dateBefore(29)).length;
       // Latest weekly answer, from the app or by text reply.
       const last = allWeekly().at(-1);
       return header(t('eb_journey'), t('progressTitle'), t('progressDesc')) +
-        `<div class="statrow">${checkedDays?`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><strong>${checkedDays}</strong><span>${t('daysCheckedIn')} · ${t('last30')}</span></div>`:`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><span style="font-size:15px">${t('checkinsEmpty')}</span></div>`}<div class="stat" style="grid-column:1/-1"><strong id="latestWeekly" style="color:${last?.status==='yellow'?'#81550d':last?.status==='red'?'#9d3b2c':'#0d6d58'}${last?'':';font-size:17px'}">${last?t(last.status).split(' — ')[0]:t('noWeekly')}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><h3>${t('last30')}</h3><div class="days">${days}</div><p id="missedOk">${t('missedOk')}</p><p class="small">${t('progressDesc')}</p></div><div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
+        `<div class="statrow">${checkedDays?`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><strong>${checkedDays}</strong><span>${t('daysCheckedIn')} · ${t('last30')}</span></div>`:`<div class="stat" style="grid-column:1/-1" id="daysCheckedIn"><span style="font-size:15px">${t('checkinsEmpty')}</span></div>`}<div class="stat" style="grid-column:1/-1"><strong id="latestWeekly" style="color:${last?.status==='yellow'?'#81550d':last?.status==='red'?'#9d3b2c':'#0d6d58'}${last?'':';font-size:17px'}">${last?t(last.status).split(' — ')[0]:t('noWeekly')}</strong><span>${t('weekResult')}</span></div></div><div class="card" style="margin-top:14px"><p id="missedOk" style="margin-top:0">${t('missedOk')}</p><p class="small" style="margin-bottom:0">${t('progressDesc')}</p></div>${myPlans()}<div class="card"><div class="small">${t('weekResult')}</div><p><span class="pill ${last?.status==='yellow'?'yellow':last?.status==='red'?'red':''}">${last?t(last.status):t('noWeekly')}</span></p><div class="divider"></div><div class="small">${t('barrierFocus')}</div><p><b>${s.primary?t(s.primary):t('noData')}</b></p><div class="small">${t('strategies')}</div><p>${s.strategies.map(k=>t(k)).join(' · ')||t('noData')}</p></div>` +
         foot()
     }
 
