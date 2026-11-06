@@ -45,7 +45,7 @@ $env:DEAP_HOST="0.0.0.0"; python server.py
 DEAP_HOST=0.0.0.0 python3 server.py
 ```
 
-On start, the server prints the address to open on the phone, for example `http://192.168.1.20:8000/patient.html`. Windows may ask once whether to allow Python through the firewall; allow it for private networks. There is no login, so anyone on the same network can open the demo: use fictional data only, and leave `DEAP_HOST` unset when you do not need phone access.
+On start, the server prints the address to open on the phone, for example `http://192.168.1.20:8000/patient.html`. Windows may ask once whether to allow Python through the firewall; allow it for private networks. When the server is started this way, the invite links shown on the clinician page use that network address even if the clinician page itself was opened at `localhost`. When it is not, the page says phones cannot open the links yet. There is no login, so anyone on the same network can open the demo: use fictional data only, and leave `DEAP_HOST` unset when you do not need phone access.
 
 ## Architecture
 

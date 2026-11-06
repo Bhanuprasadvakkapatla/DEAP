@@ -1395,7 +1395,7 @@ class Handler(SimpleHTTPRequestHandler):
         path, m = self.route()
         if path == "/api/health":
             return self.json(
-                {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False}
+                {"ok": True, "mode": "synthetic-local-demo", "clinicalUse": False, **phone_access()}
             )
         if path == "/api/reports":
             with LOCK, db() as c:
@@ -1817,6 +1817,16 @@ def lan_address():
             return socket.gethostbyname(socket.gethostname())
         except OSError:
             return "127.0.0.1"
+
+
+def phone_access():
+    """Can phones reach this server, and at what address? Used to build invite links that work on a phone."""
+    if HOST in ("0.0.0.0", "::"):
+        ip = lan_address()
+        return {"phoneAccess": True, "phoneBase": None if ip.startswith("127.") else f"http://{ip}:{PORT}"}
+    if HOST in ("127.0.0.1", "localhost", "::1"):
+        return {"phoneAccess": False, "phoneBase": None}
+    return {"phoneAccess": True, "phoneBase": f"http://{HOST}:{PORT}"}
 
 
 if __name__ == "__main__":

@@ -1067,12 +1067,33 @@
       patient: 'Patient leads'
     };
     const defaultLeads = age => age < 10 ? 'parent' : age < 18 ? 'shared' : 'patient';
-    const inviteUrl = token => location.origin + '/patient.html?invite=' + encodeURIComponent(token);
+    // Address a phone can use (from the server). Falls back to this page's own address.
+    let phone = {
+      phoneAccess: false,
+      phoneBase: null
+    };
+    const inviteUrl = token => (phone.phoneBase || location.origin) + '/patient.html?invite=' + encodeURIComponent(token);
+    const phoneNote = () => phone.phoneBase ? '' : `<p class="muted" id="phoneNote">${phone.phoneAccess ? 'Phones cannot open these links: the network address of this computer was not found. See README.' : 'Phones cannot open these links until the server is started for phones. See README.'}</p>`;
+    async function loadPhone() {
+      try {
+        const r = await fetch('/api/health', {
+          cache: 'no-store'
+        });
+        if (r.ok) {
+          const h = await r.json();
+          phone = {
+            phoneAccess: !!h.phoneAccess,
+            phoneBase: h.phoneBase || null
+          }
+        }
+      } catch (e) {}
+    }
+    loadPhone();
     let enrollResult = null,
       leadsTouched = false;
 
     function linkList(f, name) {
-      return `<div class="list">${f.links.map(l=>{const u=inviteUrl(l.token);const who=l.person==='patient'?esc(name)+' (patient)':esc(f.caregiverName)+' (caregiver)';return `<div class="item invite" data-person="${l.person}"><small>${who}</small><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><code class="link-url">${esc(u)}</code><button class="button small secondary" data-copy="${esc(u)}">Copy</button></div></div>`}).join('')}</div><p class="muted">Demo links only. No real SMS is sent. Each link is one person.</p>`
+      return `<div class="list">${f.links.map(l=>{const u=inviteUrl(l.token);const who=l.person==='patient'?esc(name)+' (patient)':esc(f.caregiverName)+' (caregiver)';return `<div class="item invite" data-person="${l.person}"><small>${who}</small><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><code class="link-url">${esc(u)}</code><button class="button small secondary" data-copy="${esc(u)}">Copy</button></div></div>`}).join('')}</div><p class="muted">Demo links only. No real SMS is sent. Each link is one person.</p>${phoneNote()}`
     }
 
     const differText = n => `Patient and caregiver answers differ on ${n} item${n===1?'':'s'} — worth discussing at the visit.`;
