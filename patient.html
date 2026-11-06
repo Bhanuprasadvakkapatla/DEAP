@@ -301,6 +301,36 @@
       color: #128367
     }
 
+    .speakrow {
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .speakrow>.choice,
+    .speakrow>p,
+    .speakrow>h3 {
+      flex: 1
+    }
+
+    .batq {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px
+    }
+
+    .speak {
+      flex: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid #c8d8da;
+      background: #fff;
+      font-size: 18px;
+      line-height: 1
+    }
+
     .whosees {
       margin: 6px 0 10px;
       padding-left: 18px;
@@ -937,6 +967,7 @@
         d_remEnc: "you've got this. Quick check-in time.",
         ws_discreetOn: 'Discreet mode is on: texts and previews use neutral words, with no mention of transplant or medicine.',
         ws_discreetOff: 'Discreet mode is off: texts and previews may mention your medicine.',
+        readAloud: 'Read aloud',
         recheckTitle: 'Time for your 6-month check-in',
         recheckDesc: 'Please answer the 14 questions again. Your earlier answers are kept.',
         recheckBtn: 'Retake my checklist',
@@ -1125,6 +1156,7 @@
         d_remEnc: 'tú puedes. Es hora de un registro rápido.',
         ws_discreetOn: 'El modo discreto está activado: los mensajes y vistas previas usan palabras neutras, sin mencionar el trasplante ni la medicina.',
         ws_discreetOff: 'El modo discreto está desactivado: los mensajes y vistas previas pueden mencionar tu medicina.',
+        readAloud: 'Leer en voz alta',
         recheckTitle: 'Es hora de tu registro de 6 meses',
         recheckDesc: 'Responde otra vez las 14 preguntas. Tus respuestas anteriores se guardan.',
         recheckBtn: 'Volver a hacer mi lista',
@@ -1253,6 +1285,37 @@
       return d.toLocaleDateString('en-CA')
     };
 
+    // "Read it to me": the browser's own speech, in the current language. No outside services.
+    // The button is hidden when the browser has no voice for that language.
+    function voiceFor() {
+      try {
+        const want = s.lang === 'es' ? 'es' : 'en';
+        return (window.speechSynthesis?.getVoices() || []).find(v => String(v.lang || '').toLowerCase().startsWith(want)) || null
+      } catch (e) {
+        return null
+      }
+    }
+    const speakBtn = text => voiceFor() ?
+      `<button type="button" class="speak" data-speak="${esc(text)}" aria-label="${esc(t('readAloud'))}" title="${esc(t('readAloud'))}">🔊</button>` : '';
+
+    function speak(text) {
+      const v = voiceFor();
+      if (!v) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = v.lang;
+      try {
+        u.voice = v
+      } catch (e) {
+        // Some browsers only accept their own voice objects; the language alone is enough.
+      }
+      speechSynthesis.speak(u)
+    }
+    // Voices often load after the page; show the buttons once they are ready.
+    try {
+      if (window.speechSynthesis) speechSynthesis.addEventListener('voiceschanged', () => render())
+    } catch (e) {}
+
     // Discreet mode is the patient's own setting. Default: on for patients aged 10-17 (from their link).
     const discreetDefault = () => !!(deapInvite && deapInvite.person === 'patient' && deapInvite.age >= 10 &&
       deapInvite.age <= 17);
@@ -1350,14 +1413,15 @@
       // Keep only ideas that belong to the current biggest barrier.
       s.strategies = s.strategies.filter(k => ideasFor(s.primary).includes(k));
       const msg = strategyMessage[s.primary];
-      return msg ? `<div class="card soft" id="helpMessage"><p style="margin:0">${t(msg)}</p></div>` :
-        choices(ideasFor(s.primary), s.strategies, true)
+      // Each idea gets a speaker next to it (a button cannot sit inside the choice button).
+      return msg ? `<div class="card soft" id="helpMessage"><div class="speakrow"><p style="margin:0">${t(msg)}</p>${speakBtn(t(msg))}</div></div>` :
+        ideasFor(s.primary).map(k => `<div class="speakrow">${choices([k], s.strategies, true)}${speakBtn(t(k))}</div>`).join('')
     }
 
     const batUnanswered = () => batKeys.filter(k => !['yes', 'no'].includes(s.batAnswers[k]));
 
     function batList() {
-      return `<div class="batlist">${barrierKeys.map(k=>{const a=s.batAnswers[k];const missing=batTried&&k!=='other'&&!a;return `<div class="batrow${missing?' missing':''}" role="group" aria-labelledby="bat-${k}"><div class="batq" id="bat-${k}">${esc(t(k))}</div><div class="yn">${['yes','no'].map(v=>`<button class="ynbtn" data-bat="${k}" data-ans="${v}" aria-pressed="${a===v}">${t(v)}</button>`).join('')}</div>${k==='other'&&a==='yes'?`<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>`:''}</div>`}).join('')}</div>`
+      return `<div class="batlist">${barrierKeys.map(k=>{const a=s.batAnswers[k];const missing=batTried&&k!=='other'&&!a;return `<div class="batrow${missing?' missing':''}" role="group" aria-labelledby="bat-${k}"><div class="batq" id="bat-${k}"><span>${esc(t(k))}</span>${speakBtn(t(k))}</div><div class="yn">${['yes','no'].map(v=>`<button class="ynbtn" data-bat="${k}" data-ans="${v}" aria-pressed="${a===v}">${t(v)}</button>`).join('')}</div>${k==='other'&&a==='yes'?`<textarea class="field" id="other" rows="3" placeholder="${esc(t('otherPlaceholder'))}">${esc(s.other)}</textarea>`:''}</div>`}).join('')}</div>`
     }
 
     function onboarding() {
@@ -1409,13 +1473,13 @@
         answer: '',
         note: ''
       };
-      return `<div class="card" id="checkBack"><div class="iconbubble">✓</div><h3>${t('checkTitle')}</h3><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?'✓':'○'}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
+      return `<div class="card" id="checkBack"><div class="iconbubble">✓</div><div class="speakrow"><h3>${t('checkTitle')}</h3>${speakBtn([t('checkTitle'), p.patientText, t('check_working'), t('check_not_really'), t('check_change')].join('. '))}</div><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?'✓':'○'}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
     }
 
     // Plans the care team agreed with the patient (from the server), in the patient's own words.
     function myPlans() {
       if (isCg10()) return theirPlans();
-      return `<div class="card soft" id="myPlan"><div class="small">${t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
+      return `<div class="card soft" id="myPlan"><div class="small">${t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
     }
 
     // ---- Personal links: who this person is, and what they may see (the server enforces it) ----
@@ -1429,7 +1493,7 @@
       const pt = esc(deapInvite.patientName),
         v = deapView || {};
       const shared = deapInvite.sharing?.plans;
-      const plans = shared ? (deapPlans.length ? deapPlans.map(p => `<div class="planitem"><p class="planwords">${esc(p.patientText)}</p><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join('') : `<h3 style="margin-top:8px">${tf('noPlanYet',{pt})}</h3>`) : `<p>${tf('plansPrivate',{pt})}</p>`;
+      const plans = shared ? (deapPlans.length ? deapPlans.map(p => `<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join('') : `<h3 style="margin-top:8px">${tf('noPlanYet',{pt})}</h3>`) : `<p>${tf('plansPrivate',{pt})}</p>`;
       const dates = (v.checkbackDates || []).map(d => new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
         month: 'short',
         day: 'numeric'
@@ -1700,6 +1764,11 @@
       if (txt) {
         const body = txt.dataset.text || document.getElementById('textBody')?.value || '';
         if (body.trim()) sendText(body);
+        return
+      }
+      const sp = e.target.closest('[data-speak]');
+      if (sp) {
+        speak(sp.dataset.speak);
         return
       }
       const chk = e.target.closest('[data-check]');
