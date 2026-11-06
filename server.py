@@ -1041,6 +1041,11 @@ def chart_signals(c, pid):
     flags = []
     if levels_unsteady(spread):
         flags.append({"kind": "unsteady", "text": f"Levels unsteady: SD of last {TAC_DRAWS} levels: {spread:.1f} (flag at {TAC_SD:g} or more)"})
+    # Rich 2018: fewer than 4 levels in the last 6 months also counts. Only when the chart has
+    # some levels (no lab data at all is "no chart data", not a flag).
+    in_six = [d for d in draws if date.fromisoformat(d["drawn_on"]) >= add_months(today, -6)]
+    if draws and len(in_six) < TAC_DRAWS:
+        flags.append({"kind": "few_levels", "text": f"Fewer than {TAC_DRAWS} levels in the last 6 months ({len(in_six)})"})
     if last_visit and today > add_months(date.fromisoformat(last_visit), VISIT_MONTHS):
         flags.append({"kind": "no_visit", "text": f"No clinic visit in over {VISIT_MONTHS} months"})
     if last_lab and (today - date.fromisoformat(last_lab)).days > LAB_DAYS:
