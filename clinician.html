@@ -1158,9 +1158,9 @@
     }
 
     // One barrier task. showPatient: in the worklist, name the patient.
-    function taskCard(t, showPatient) {
+    function taskCard(t, showPatient, yours) {
       const who = esc(t.patientName || 'Patient') + (t.patientLastInitial ? ' ' + esc(t.patientLastInitial) + '.' : '');
-      const head = (showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`) + (t.barrier === 'ranout' ? ' ' + doFirstPill : '');
+      const head = (showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`) + (t.barrier === 'ranout' ? ' ' + doFirstPill : '') + (yours ? ' <span class="pill blue yours">Yours</span>' : '');
       const formOpen = planFormFor === t.id;
       const action = formOpen ? '' : t.status === 'needs_plan' ?
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
@@ -1209,6 +1209,18 @@
       clinician_review: 'Clinician review needed'
     };
 
+    // Plan for each barrier: the signed-in role's own items first ("Yours"), the rest collapsed under
+    // "Other team members' items (N)". With "Show everyone" or no role: the usual order. Nothing is hidden.
+    function tasksForRole(list) {
+      const role = viewRole();
+      if (role === 'all') return list.map(t => taskCard(t, false)).join('');
+      const isMine = t => t.ownerRole === role || (t.needsReview && role === routeOf('Nephrologist / NP / Pharmacist'));
+      const mine = list.filter(isMine),
+        others = list.filter(t => !isMine(t));
+      return mine.map(t => taskCard(t, false, true)).join('') + (mine.length ? '' : '<p class="muted" id="noneYours">None of these are yours.</p>') +
+        (others.length ? `<details class="planhistory others" data-wl="others" ${wlOpen.others||others.some(t=>t.id===planFormFor)?'open':''}><summary>Other team members' items (${others.length})</summary><div class="list" style="margin-top:8px">${others.map(t=>taskCard(t,false)).join('')}</div></details>` : '')
+    }
+
     // Patient detail, most important first. Nothing here is clinical advice; all data is fictional.
     function detail(p) {
       const w = p.weekly || [],
@@ -1242,7 +1254,7 @@
       // c. The patient's own words, exactly as written.
       const words = ownWords(p) ? `<div class="panel" id="ownWordsPanel"><h2>In the patient's own words</h2><div class="ownwords" id="ownWords">${esc(ownWords(p))}</div></div>` : '';
       // d. Plans.
-      const plans = section('plans', 'Plan for each barrier', `<p class="muted">One concrete plan per barrier, made with the patient.${p.clockOffsetDays?` Demo clock is +${esc(p.clockOffsetDays)} days (see Demo tools).`:''}</p><div class="list" id="patientTasks">${mine.length?mine.map(t=>taskCard(t,false)).join(''):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'}</div>`, true);
+      const plans = section('plans', 'Plan for each barrier', `<p class="muted">One concrete plan per barrier, made with the patient.${p.clockOffsetDays?` Demo clock is +${esc(p.clockOffsetDays)} days (see Demo tools).`:''}</p><div class="list" id="patientTasks">${mine.length?tasksForRole(mine):'<p class="muted">No barrier tasks yet. Tasks appear when the patient finishes the 14 BAT items.</p>'}</div>`, true);
       // e. Chart signals (the demo forms are in Demo tools).
       const chart = p.chart ? section('chart', 'Chart signals', chartBody(p), true, '<span class="pill">Demo — no real EHR</span>') : '';
       // f. Checklist and 6-month re-check, with the assessment summary.
