@@ -172,6 +172,10 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS caregiver_states (family_id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
         )
+        # Weekly check-ins sent by text reply (simulated SMS). Kept apart from the patient's state.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS text_replies (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, person TEXT NOT NULL, body TEXT NOT NULL, status TEXT, reply TEXT NOT NULL, at TEXT NOT NULL)"
+        )
         fresh_seed = c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0
         if fresh_seed:
             # Fictional demo patients: (name, BAT "yes" barriers with the biggest first, weekly status)
@@ -290,6 +294,49 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
     return fid
 
 
+# Text replies for the weekly check-in: 1 = Green, 2 = Yellow, 3 = Red.
+TEXT_STATUS = {"1": "green", "2": "yellow", "3": "red"}
+TEXT_REPLIES = {
+    "en": {"ok": "Thanks, got it.", "help": "Reply 1, 2 or 3"},
+    "es": {"ok": "Gracias, recibido.", "help": "Responde 1, 2 o 3"},
+}
+
+
+def weekly_answers(c, pid, st):
+    """All weekly answers for this patient record: in-app ones plus text replies, oldest first.
+    The care team treats a text reply exactly like an in-app answer (marked via text)."""
+    rows = c.execute(
+        "SELECT status, at FROM text_replies WHERE patient_id=? AND status IS NOT NULL", (pid,)
+    ).fetchall()
+    texts = [{"date": r["at"], "status": r["status"], "note": "", "via": "text"} for r in rows]
+    return sorted((st.get("weekly") or []) + texts, key=lambda w: w.get("date", ""))
+
+
+def text_inbound(c, token, body):
+    """One inbound text. Returns (reply, http status)."""
+    inv = invite_row(c, token)
+    if not inv:
+        return {"error": "Unknown sender"}, 404
+    pid = inv["family_id"]
+    main = json.loads(c.execute("SELECT state FROM patients WHERE id=?", (pid,)).fetchone()["state"])
+    words = TEXT_REPLIES["es" if main.get("lang") == "es" else "en"]
+    if not owns_record(inv):
+        # The weekly check-in belongs to the patient's own link.
+        return {"error": "Text check-ins are only for the patient's own link"}, 403
+    status = TEXT_STATUS.get(str(body).strip())
+    reply = words["ok"] if status else words["help"]
+    c.execute(
+        "INSERT INTO text_replies(patient_id,person,body,status,reply,at) VALUES (?,?,?,?,?,?)",
+        (pid, inv["person"], str(body)[:160], status, reply, iso()),
+    )
+    if status:
+        # A text reply counts as check-in activity, just like an in-app weekly answer.
+        c.execute("UPDATE patients SET last_engagement=?, demo_offset_hours=0 WHERE id=?", (iso(), pid))
+        record_activity(c, pid)
+        event(c, pid, "weekly", f"Weekly check-in via text reply: {status.capitalize()}")
+    return {"reply": reply, "status": status}, 200
+
+
 def is_family(c, pid):
     return c.execute("SELECT 1 FROM families WHERE id=?", (pid,)).fetchone() is not None
 
@@ -396,7 +443,7 @@ def invite_view(c, inv):
     # answers, own words, weekly ratings or check-back notes. Plans and the weekly colour only
     # when the patient shares them; check-back dates always.
     plans = patient_plans(c, inv["family_id"], main)
-    weekly = (main.get("weekly") or [None])[-1]
+    weekly = (weekly_answers(c, inv["family_id"], main) or [None])[-1]
     return {
         "invite": who,
         "ownState": caregiver_state(c, inv["family_id"]),
@@ -784,7 +831,7 @@ def task_view(c, t, st):
         "patientAnswer": (st.get("checkbacks") or {}).get(str(t["id"])),
         # The caregiver's own check-back answer (patient 10+, when they are asked), exactly as written.
         "caregiverAnswer": ((caregiver_state(c, t["patient_id"]) or {}).get("checkbacks") or {}).get(str(t["id"])),
-        "latestWeekly": (st.get("weekly") or [None])[-1],
+        "latestWeekly": (weekly_answers(c, t["patient_id"], st) or [None])[-1],
         # Patient context shown next to the plan form (read-only).
         "strategies": st.get("strategies", []),
         # The patient's own words, exactly as written ("Something else").
@@ -845,10 +892,13 @@ def derive(row, c, chart=False):
         reasons.append("Demo silence flag")
     if stage in ("caregiver_notice", "clinician_review"):
         reasons.append("Overdue check-in: " + stage.replace("_", " "))
-    weekly = state.get("weekly") or []
+    # In-app weekly answers and text replies count the same way.
+    weekly = weekly_answers(c, pid, state)
     if weekly and weekly[-1].get("status") in ("yellow", "red"):
-        reasons.append("Weekly " + weekly[-1]["status"] + " response")
-    last = state.get("weekly") or []
+        reasons.append(
+            "Weekly " + weekly[-1]["status"] + " response" + (" via text reply" if weekly[-1].get("via") == "text" else "")
+        )
+    last = weekly
     status = (
         "blue"
         # Awaiting assessment: no barriers yet and the 14 BAT items are not all answered.
@@ -872,7 +922,7 @@ def derive(row, c, chart=False):
     extra = {}
     if chart:
         signals = chart_signals(c, pid)
-        latest = (state.get("weekly") or [{}])[-1].get("status")
+        latest = (weekly or [{}])[-1].get("status")
         if signals["flags"]:
             reasons.append("Chart flag for team review")
             # A chart flag raises the status to at least yellow, never lowers it.
@@ -920,6 +970,15 @@ def derive(row, c, chart=False):
         },
         lastEngagement=row["last_engagement"],
         demoOffsetHours=row["demo_offset_hours"],
+        # All weekly answers, in-app and by text reply (each text one marked via "text").
+        weekly=weekly,
+        textReplies=[
+            dict(r)
+            for r in c.execute(
+                "SELECT body, status, reply, at FROM text_replies WHERE patient_id=? ORDER BY id DESC LIMIT 6",
+                (pid,),
+            ).fetchall()
+        ][::-1],
         ),
     }
 
@@ -1030,7 +1089,7 @@ def validate_state(state):
         or not 0 <= state.get("contactRequests", 0) <= 100000
     ):
         return "Invalid support request count"
-    for key in ("silence", "shift", "sharePlans", "shareWeekly", "discreet"):
+    for key in ("silence", "shift", "sharePlans", "shareWeekly", "discreet", "textCheckin"):
         if key in state and type(state[key]) != bool:
             return "Invalid " + key
     checks = state.get("checkbacks", {})
@@ -1209,6 +1268,15 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/families" and isinstance(data, dict):
             with LOCK, db() as c:
                 reply = self.enroll(c, data)
+            return self.json(*reply)
+        if path == "/api/sms/inbound" and isinstance(data, dict):
+            # Simulated SMS (no real texts are sent or received). Shaped like a texting-service
+            # webhook so a real SMS provider could be connected later: who sent it, and the body.
+            token, body = data.get("token"), data.get("body")
+            if not isinstance(token, str) or not isinstance(body, str):
+                return self.json({"error": "token and body are required"}, 400)
+            with LOCK, db() as c:
+                reply = text_inbound(c, token, body)
             return self.json(*reply)
         fm = re.fullmatch(r"/api/families/([A-Za-z0-9_-]+)/leads", path)
         if fm and isinstance(data, dict):

@@ -83,6 +83,8 @@ The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link o
 
 New Spanish text for families (who sees what, sharing, hand-off) is a draft translation for the clinical team to review.
 
+**Check in by text reply** (simulated; no real SMS). Patient setting "Check in by text reply (no data needed)" shows a phone-style text thread on Today. `POST /api/sms/inbound` with `{ "token": "<invite token>", "body": "1" }` takes a reply: 1 = Green, 2 = Yellow, 3 = Red for the weekly check-in; anything else gets "Reply 1, 2 or 3". It is shaped like a texting-service webhook so a real SMS provider could be connected later. Replies are stored in their own table (not the patient's state) and the care team sees them exactly like in-app weekly answers, marked "via text reply". Only the patient's own link (or the caregiver of a child under 10) can check in this way.
+
 **Discreet mode** (patient setting; default on for ages 10–17): the invite preview, reminder previews, the app header and the tab title use neutral words with no "transplant", "medicine", "pills" or "dose" (for example "Hi Maya, your check-in is ready (1 min)."). Inside the app the normal wording stays. Spanish discreet wording is a draft.
 
 **Demo families** (fictional, based on the packet personas; their links are in each patient's detail): **Maya R., 15, Shared**: Maya and her mom Laura both answered; they differ on one item. **Jordan P., 20, Patient leads**: own words about the hand-off from Mom; Mom (Denise) has a link but has not answered. **Leo S., 8, Parent leads, Spanish**: his mom Ana is the user (caregiver link only).
