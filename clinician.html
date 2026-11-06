@@ -939,6 +939,12 @@
   </div>
   <script>
     'use strict';
+    // Team-only concerns the checklist does not ask (Builder Packet): key, label, who it goes to.
+    const TEAM_CONCERNS = [
+      ['literacy', 'Possible health-literacy problem', 'Social worker'],
+      ['mood', 'Possible depression, anxiety or ADHD (patient or parent)', 'Psychologist'],
+      ['organization', 'Possible organization or executive-function difficulties', 'Neuropsychology referral']
+    ];
     // Modules in the left menu for each "Sign in as (demo)" role. A screen choice only, not security.
     // Placeholder: to be confirmed with the clinic team.
     // Not signed in, "Show everyone", or a role not listed here: every module, as before.
@@ -1262,6 +1268,10 @@
       // e. Chart signals (the demo forms are in Demo tools).
       const chart = p.chart ? section('chart', 'Chart signals', chartBody(p), true, '<span class="pill">Demo — no real EHR</span>') : '';
       // f. Checklist and 6-month re-check, with the assessment summary.
+      // Team only: three things the checklist does not ask (Builder Packet). Never shown to the patient or caregiver.
+      const tc = p.teamConcerns || [];
+      const concernRoute = to => to === 'Neuropsychology referral' ? 'Neuropsychology referral (testing)' : 'Refer to ' + ownerLabel(routeOf(to));
+      const concerns = p.teamConcerns ? section('concerns', 'Other concerns to refer', `<p class="muted" style="margin-top:0">Team only. Not shown to the patient or caregiver. Does not change the status colour.</p><div class="list" id="teamConcerns">${TEAM_CONCERNS.map(([k,label,to])=>{const on=tc.find(x=>x.key===k);return `<label class="item" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-concern="${k}" ${on?'checked':''} style="margin-top:3px"><span><strong style="display:inline">${esc(label)}</strong><div class="meta">${concernRoute(to)}${on?' · flagged '+esc(shortDate(on.at))+' by '+esc(on.by):''}</div></span></label>`}).join('')}</div><span id="concernResult" class="muted" role="status"></span>`, tc.length > 0, tc.length ? `<span class="pill yellow">${tc.length} flagged</span>` : '') : '';
       const checklist = section('checklist', 'Checklist and 6-month re-check', `<div class="list">${recheckItem(p)}<div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${ranoutFirst(p.barriers).map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k==='ranout'?' '+doFirstPill:''}${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${(p.barrierOwners||{})[k]?ownerLabel(p.barrierOwners[k]):'—'}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div>`, true);
       // g. Patient and caregiver answers (age 10+).
       const answers = p.answers ? section('answers', 'Barrier answers, side by side', answersTable(p), true) : '';
@@ -1274,7 +1284,7 @@
       const escalation = section('escalation', 'Overdue check-in and escalation', `<p class="muted" style="margin-top:0">Engagement safety net only. An overdue response does not confirm a missed dose, unconsciousness, or an emergency. These are simulated notices, not real messages.</p><div class="list"><div class="item"><small>Current non-response stage</small><strong id="escStage">${esc(escalationLabels[e.stage]||e.stage)}</strong></div><div class="item"><small>Last recorded patient engagement · ${((p.elapsedHours||0)/24).toFixed(1)} days elapsed (includes demo offset)</small><strong>${esc(p.lastEngagement?new Date(p.lastEngagement).toLocaleString():'—')}</strong></div><div class="item"><small>Clinician acknowledgment</small><strong>${e.acknowledged?'Acknowledged':'Not acknowledged'}</strong></div></div><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="button" data-esc="acknowledge" ${['none','resolved'].includes(e.stage)||e.acknowledged?'disabled':''}>Acknowledge alert</button><button class="button secondary" data-esc="resolve" ${['none','resolved'].includes(e.stage)?'disabled':''}>Mark follow-up resolved</button></div><p id="escResult" class="muted" role="status"></p><p class="muted">If a caregiver finds a patient unconscious or unresponsive, call 911 immediately. Do not wait for this app.</p>`, false);
       const log = section('log', 'Activity log (demo events)', `<div id="escHistory" class="list">${escCache.pid===p.id?escCache.html:'<span class="muted">Loading…</span>'}</div>`, false);
       const demo = section('demo', 'Demo tools (not part of a real clinic)', `<p class="alert" style="margin-top:0">Demo only. These tools change fictional demo data or this patient's demo clock so the hackathon demo can show things happening. A real clinic would not have them. Real time is never changed.</p><div class="democlock"><button class="button small secondary" id="jumpClock">Demo: jump forward 14 days</button><span class="muted">Moves this patient's check-back clock so check-backs come due.${p.clockOffsetDays?` <strong id="clockNow">Demo clock: +${p.clockOffsetDays} days</strong>`:''}</span><span id="clockResult" class="muted" role="status"></span></div><div class="democlock">${(p.rechecks||[]).length?'<button class="button small secondary" id="makeRecheckDue">Demo: make 6-month re-check due</button>':'<span class="muted">Demo: make 6-month re-check due (available after a completed checklist).</span>'}<span id="recheckMsg" class="muted" role="status"></span></div>${p.chart?chartDemoForms():''}<div class="democlock"><strong>Overdue check-in timer</strong><span class="muted">Simulate time without engagement (fictional data only):</span><button class="button small secondary" data-sim="192">Simulate 8 days</button><button class="button small secondary" data-sim="360">Simulate 15 days</button><button class="button small secondary" data-sim="0">Reset timer</button><span id="simResult" class="muted" role="status"></span></div>`, false);
-      return head + summary + words + plans + chart + checklist + answers + note + weekly + family + escalation + log + demo
+      return head + summary + words + plans + chart + concerns + checklist + answers + note + weekly + family + escalation + log + demo
     }
 
     // This week's check-ins (last 7 days), for the Transplant coordinator: who answered (colour and
@@ -2120,7 +2130,33 @@
         x.setSelectionRange(caret, caret)
       }
     });
-    document.addEventListener('change', e => {
+    document.addEventListener('change', async e => {
+      const concern = e.target.dataset?.concern;
+      if (concern && selected) {
+        e.target.disabled = true;
+        try {
+          const r = await fetch('/api/patients/' + encodeURIComponent(selected) + '/concerns', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              concern,
+              on: e.target.checked,
+              by: actingAs()
+            })
+          });
+          if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
+          await refresh();
+          render();
+          if (el('concernResult')) el('concernResult').textContent = 'Saved.'
+        } catch (err) {
+          e.target.checked = !e.target.checked;
+          e.target.disabled = false;
+          if (el('concernResult')) el('concernResult').textContent = 'Could not save: ' + err.message
+        }
+        return
+      }
       if (e.target.id === 'filter') {
         filter = e.target.value;
         render()

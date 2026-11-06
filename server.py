@@ -412,6 +412,10 @@ def init():
         )
         if c.execute("SELECT COUNT(*) FROM labs").fetchone()[0] == 0:
             seed_chart(c)
+        # Team-only concerns to refer (see TEAM_CONCERNS). Never part of the patient's state.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS team_concerns (patient_id TEXT NOT NULL, concern TEXT NOT NULL, flagged_at TEXT NOT NULL, flagged_by TEXT NOT NULL, PRIMARY KEY(patient_id, concern))"
+        )
 
 
 def create_family(c, first, initial, dob, lang, caregiver, leads=None, ask_sharing=True):
@@ -1398,6 +1402,27 @@ def clean_plan(data):
     return fields, None
 
 
+# Things the team may notice that the 14-item checklist does not ask (Builder Packet). Team only:
+# stored in their own table, shown on the clinician page, never sent to the patient or caregiver.
+TEAM_CONCERNS = {
+    "literacy": ("Possible health-literacy problem", "Social worker"),
+    "mood": ("Possible depression, anxiety or ADHD (patient or parent)", "Psychologist"),
+    "organization": ("Possible organization or executive-function difficulties", "Neuropsychology referral"),
+}
+
+
+def team_concerns(c, pid):
+    rows = c.execute(
+        "SELECT concern, flagged_at, flagged_by FROM team_concerns WHERE patient_id=?", (pid,)
+    ).fetchall()
+    have = {r["concern"]: r for r in rows}
+    return [
+        {"key": k, "label": label, "routeTo": to, "at": have[k]["flagged_at"], "by": have[k]["flagged_by"]}
+        for k, (label, to) in TEAM_CONCERNS.items()
+        if k in have
+    ]
+
+
 def acting_role(data):
     """Who is acting, for the audit trail. There is no login in this demo."""
     by = data.get("by")
@@ -1486,6 +1511,7 @@ def derive(row, c, chart=False, for_patient=False):
             "answers": answer_compare(c, pid, state),
             "sharing": family_sharing(c, pid, state) if is_family(c, pid) else None,
             "chart": signals,
+            "teamConcerns": team_concerns(c, pid),
             # Latest weekly answer is Green but the chart has a flag.
             "chartMismatch": bool(signals["flags"]) and latest == "green",
         }
@@ -1712,7 +1738,7 @@ class Handler(SimpleHTTPRequestHandler):
     def route(self):
         path = unquote(urlparse(self.path).path)
         m = re.fullmatch(
-            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs|visit|bat-recheck))?",
+            r"/api/patients/([A-Za-z0-9_-]+)(?:/(care-plan|escalation|simulate|requests|plan-clock|labs|visit|bat-recheck|concerns))?",
             path,
         )
         return path, m
@@ -2083,6 +2109,20 @@ class Handler(SimpleHTTPRequestHandler):
                 (pid, visit.isoformat()),
             )
             event(c, pid, "simulation", f"Demo only: last clinic visit set to {visit.isoformat()}")
+        elif action == "concerns":
+            # Team only: flag or clear one concern to refer. Does not change the patient's status.
+            key, on = data.get("concern"), data.get("on")
+            if key not in TEAM_CONCERNS or type(on) != bool:
+                return {"error": "Invalid concern"}, 400
+            label, to = TEAM_CONCERNS[key]
+            if on:
+                c.execute(
+                    "INSERT OR IGNORE INTO team_concerns(patient_id,concern,flagged_at,flagged_by) VALUES (?,?,?,?)",
+                    (pid, key, iso(), acting_role(data)),
+                )
+            else:
+                c.execute("DELETE FROM team_concerns WHERE patient_id=? AND concern=?", (pid, key))
+            event(c, pid, "team_concern", f"Team concern {'flagged' if on else 'cleared'}: {label} (refer to {to}; {acting_role(data)})")
         elif action == "plan-clock":
             # Demo only: move this patient's check-back clock forward. Real time is unchanged.
             days = data.get("days")
