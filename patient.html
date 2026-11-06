@@ -1005,6 +1005,8 @@
         plansPrivate: "{pt}'s plans are private.",
         noPlanYet: 'The care team will make a plan with {pt}.',
         upcomingChecks: 'Upcoming check-backs',
+        planOne: 'plan',
+        planMany: 'plans',
         theirWeekly: "{pt}'s latest weekly check-in",
         cgOwnPlans: 'Plans for you',
         cgOwnDesc: 'For things only you told us about. {pt} does not see these plans.',
@@ -1198,6 +1200,8 @@
         plansPrivate: 'Los planes de {pt} son privados.',
         noPlanYet: 'El equipo de cuidado hará un plan con {pt}.',
         upcomingChecks: 'Próximos seguimientos',
+        planOne: 'plan',
+        planMany: 'planes',
         theirWeekly: 'Última respuesta semanal de {pt}',
         cgOwnPlans: 'Planes para ti',
         cgOwnDesc: 'Para cosas que solo tú nos contaste. {pt} no ve estos planes.',
@@ -1508,10 +1512,16 @@
         v = deapView || {};
       const shared = deapInvite.sharing?.plans;
       const plans = shared ? (deapPlans.length ? deapPlans.map(p => `<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join('') : `<h3 style="margin-top:8px">${tf('noPlanYet',{pt})}</h3>`) : `<p>${tf('plansPrivate',{pt})}</p>`;
-      const dates = (v.checkbackDates || []).map(d => new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
-        month: 'short',
-        day: 'numeric'
-      }));
+      // Each date once, with how many plans have a check-back that day: "Nov 19 (3 plans)".
+      const perDay = new Map();
+      (v.checkbackDates || []).forEach(d => {
+        const day = new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
+          month: 'short',
+          day: 'numeric'
+        });
+        perDay.set(day, (perDay.get(day) || 0) + 1)
+      });
+      const dates = [...perDay].map(([day, n]) => `${day} (${n} ${t(n === 1 ? 'planOne' : 'planMany')})`);
       const wk = v.sharedWeekly ? `<div class="small" style="margin-top:10px">${tf('theirWeekly',{pt})}</div><p><span class="pill ${v.sharedWeekly.status==='yellow'?'yellow':v.sharedWeekly.status==='red'?'red':''}">${esc(t(v.sharedWeekly.status).split(' — ')[0])}</span></p>` : '';
       return `<div class="card soft" id="myPlan"><div class="small">${tf('theirPlans',{pt})}</div>${plans}${dates.length?`<div class="small" style="margin-top:10px">${t('upcomingChecks')}</div><p id="checkDates">${esc(dates.join(' · '))}</p>`:''}${wk}</div>` + cgOwnPlans()
     }
