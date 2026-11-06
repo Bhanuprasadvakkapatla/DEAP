@@ -1344,11 +1344,12 @@
 
     // A patient belongs to a role when one of their open tasks is that role's (or needs a team
     // review, for the Nephrologist / NP / Pharmacist). The Transplant coordinator also gets patients
-    // with no open task yet and the team-meeting items (chart flags, differing answers, re-checks).
+    // with no open task yet, the team-meeting items (chart flags, differing answers, re-checks), and
+    // every red or overdue-review patient (the coordinator keeps the team's to-do list).
     function ownsPatient(p, role) {
       const mine = tasks.filter(t => t.patientId === p.id);
       if (mine.some(t => t.ownerRole === role || (t.needsReview && role === routeOf('Nephrologist / NP / Pharmacist')))) return true;
-      if (role === routeOf('Transplant coordinator')) return !mine.length || !!p.chart?.flags?.length || !!p.answers?.differ?.length || (p.rechecks || []).some(r => r.due);
+      if (role === routeOf('Transplant coordinator')) return !mine.length || p.status === 'red' || p.escalation?.stage === 'clinician_review' || !!p.chart?.flags?.length || !!p.answers?.differ?.length || (p.rechecks || []).some(r => r.due);
       return false
     }
     const everyoneToggle = () => signedIn && roles.includes(signedIn) ?
@@ -1497,7 +1498,7 @@
       // This week's check-ins: one collapsed card at the bottom (Transplant coordinator and All).
       const digest = role === 'all' || role === routeOf('Transplant coordinator') ?
         `<details class="wlgroup wldigest" data-group="digest" data-wl="digest" ${wlOpen.digest?'open':''}><summary><h3>This week's check-ins</h3></summary>${weekDigest('weekDigest')}</details>` : '';
-      return `<div class="panel" id="worklistPanel"><div class="toolbar">${everyoneToggle()}</div><h2 id="needYou">${n?`${n} need${n===1?'s':''} you today`:'Nothing needs you today'}</h2>${WL_GROUPS.map(group).join('')||'<p class="muted">Nothing on your list right now.</p>'}${digest}</div>`
+      return `<div class="panel" id="worklistPanel"><div class="toolbar">${everyoneToggle()}</div><h2 id="needYou">${n?`${n} need${n===1?'s':''} you today`:rows.length?'Nothing urgent today':'Nothing needs you today'}</h2>${WL_GROUPS.map(group).join('')||'<p class="muted">Nothing on your list right now.</p>'}${digest}</div>`
     }
 
     // ---- Families: enroll, personal links ----
