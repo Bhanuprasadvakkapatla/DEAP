@@ -82,7 +82,9 @@ The clinician enrolls a family (**Enroll family**). Under 10: a caregiver link o
 
 **Hand-off of responsibility.** "Who leads" (set at enrollment, changeable in patient detail; every change is logged) decides who gets reminders and "Is your plan working?" check-backs: Parent leads → caregiver; Shared → both; Patient leads → patient only. A caregiver is only asked about plans the patient shares with them. Under 10 the caregiver always gets them. For Patient leads the 24-hour caregiver-notice stage is skipped (clinician review only).
 
-New Spanish text for families (who sees what, sharing, hand-off) is a draft translation for the clinical team to review.
+New Spanish text for families (who sees what, sharing, hand-off, the Progress tab) is a draft translation for the clinical team to review.
+
+**Progress tab, no scoreboard.** The packet calls streaks that punish a missed day weak. The Progress tab shows one positive number (days you checked in, last 30 days), a calendar that marks check-in days with a ✓ and leaves other days neutral, and "Missed a day? That's okay. Tell us what got in the way." There are no streaks, resetting counters, points or badges. The "I missed a dose" button on Today still records the answer for the care team.
 
 **6-month re-check** (must-keep #1: "every 6 months, or sooner if something changes"). Each person's next 14-item checklist is due 6 months after their last completed one (`DEAP_BAT_MONTHS`, default `6`). When due, Today shows "Time for your 6-month check-in"; Settings has "Something changed? Retake my checklist". A retake is a new assessment (new `batId`); earlier answers are kept in the `bat_history` table. A barrier that is still "yes" keeps its existing task and plan. The clinician sees last and next dates, "Then vs now" (barriers added or resolved), a worklist group "Checklist re-check due", and a demo-only button "Demo: make 6-month re-check due".
 
