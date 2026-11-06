@@ -83,12 +83,14 @@ OUTSIDE_PARTNER = "Outside partner (e.g., regional telehealth)"
 
 
 def center_setup(c):
-    """{role: {"onStaff": bool, "routeTo": str|None}}. Default: every role on staff."""
+    """{role: {"onStaff": bool, "routeTo": str|None, "person": str|None}}. Default: every role on
+    staff, no person named. "person" is an optional name shown with the role (no real logins)."""
     rows = {r["role"]: r for r in c.execute("SELECT * FROM center_roles")}
     return {
         role: {
             "onStaff": bool(rows[role]["on_staff"]) if role in rows else True,
             "routeTo": rows[role]["route_to"] if role in rows else None,
+            "person": (rows[role]["person"] if role in rows and "person" in rows[role].keys() else None) or None,
         }
         for role in OWNER_ROLES
     }
@@ -281,6 +283,9 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS center_roles (role TEXT PRIMARY KEY, on_staff INTEGER NOT NULL DEFAULT 1, route_to TEXT)"
         )
+        # Optional person name per role (for example "Social worker: Priya"). Demo only, no logins.
+        if "person" not in [r["name"] for r in c.execute("PRAGMA table_info(center_roles)")]:
+            c.execute("ALTER TABLE center_roles ADD COLUMN person TEXT")
         # Clinician-owned plans, one row per version. The open row (closed_at IS NULL) is
         # the current plan; closed rows keep the history with their outcome.
         c.execute(
@@ -532,6 +537,12 @@ def save_center(c, data):
     if set(given) != set(OWNER_ROLES):
         return {"error": "Send all four owner roles"}, 400
     on = {role for role in OWNER_ROLES if given[role].get("onStaff") is True}
+    names = {}
+    for role in OWNER_ROLES:
+        person = given[role].get("person")
+        if person is not None and (not isinstance(person, str) or len(person.strip()) > 45):
+            return {"error": f"The name for {role} must be up to 45 characters"}, 400
+        names[role] = (person or "").strip() or None
     for role in OWNER_ROLES:
         if role not in on:
             to = given[role].get("routeTo")
@@ -540,14 +551,15 @@ def save_center(c, data):
     before = center_setup(c)
     for role in OWNER_ROLES:
         c.execute(
-            "INSERT INTO center_roles(role,on_staff,route_to) VALUES (?,?,?) ON CONFLICT(role) DO UPDATE SET on_staff=excluded.on_staff, route_to=excluded.route_to",
-            (role, int(role in on), None if role in on else given[role]["routeTo"]),
+            "INSERT INTO center_roles(role,on_staff,route_to,person) VALUES (?,?,?,?) ON CONFLICT(role) DO UPDATE SET on_staff=excluded.on_staff, route_to=excluded.route_to, person=excluded.person",
+            (role, int(role in on), None if role in on else given[role]["routeTo"], names[role]),
         )
     setup = center_setup(c)
     changed = [r for r in OWNER_ROLES if before[r] != setup[r]]
     if changed:
         event(c, "center", "center_setup", "Center setup changed: " + "; ".join(
-            f"{r}: {'on staff' if setup[r]['onStaff'] else 'not on staff, tasks go to ' + setup[r]['routeTo']}" for r in changed))
+            f"{r}: {'on staff' if setup[r]['onStaff'] else 'not on staff, tasks go to ' + setup[r]['routeTo']}"
+            + (f" (person: {setup[r]['person']})" if setup[r]["person"] else "") for r in changed))
     # Re-route every open task to who handles it now.
     moved = 0
     for t in c.execute("SELECT id, patient_id, barrier, owner_role, home_role FROM tasks WHERE status IN ('needs_plan','plan_agreed','keep_checking')").fetchall():

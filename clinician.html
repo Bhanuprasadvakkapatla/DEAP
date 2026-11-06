@@ -523,6 +523,20 @@
       font-size: 14px
     }
 
+    .signin {
+      display: grid;
+      gap: 3px;
+      font-size: 13px
+    }
+
+    .signin label {
+      font-weight: 700
+    }
+
+    .signin select {
+      padding: 7px 9px
+    }
+
     .chips {
       display: flex;
       flex-wrap: wrap;
@@ -812,6 +826,8 @@
        Monitor check-ins and coordinate follow-up across the care journey.
       </div>
      </div>
+     <div class="signin" id="signInBox">
+     </div>
      <div>
       <span class="pill yellow" id="connection">
        Connecting…
@@ -1043,7 +1059,7 @@
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
         `<span class="muted">Check-back outcome:</span><button class="button small secondary" data-outcome="working" data-task="${t.id}">Working</button><button class="button small secondary" data-outcome="not_working" data-task="${t.id}">Not working</button><button class="button small secondary" data-adjust="${t.id}">Adjust</button>` :
         '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span>${t.caregiverOnly?(t.caregiverSees===false?'<span class="pill cgonly">Not shown to patient or caregiver (18+, no permission)</span> ':'<span class="pill cgonly">Visible to caregiver only</span> '):''}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}${t.routedReason?`<div class="meta routed">${esc(t.routedReason)}</div>`:''}${t.needsReview?`<div class="review"><span class="pill yellow">Needs team review</span> Tried ${esc(t.failedSinceReview)} plans for ${esc(names[t.barrier]||t.barrier)}. Physician review needed. <button class="button small secondary" data-reviewed="${t.id}">Mark reviewed</button></div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan,t.caregiverOnly)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span>${t.caregiverOnly?(t.caregiverSees===false?'<span class="pill cgonly">Not shown to patient or caregiver (18+, no permission)</span> ':'<span class="pill cgonly">Visible to caregiver only</span> '):''}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}${t.routedReason?`<div class="meta routed">${esc(t.routedReason)}</div>`:''}${t.needsReview?`<div class="review"><span class="pill yellow">Needs team review</span> Tried ${esc(t.failedSinceReview)} plans for ${esc(names[t.barrier]||t.barrier)}. Physician review needed. <button class="button small secondary" data-reviewed="${t.id}">Mark reviewed</button></div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${ownerLabel(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan,t.caregiverOnly)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
     }
 
     function stats() {
@@ -1058,8 +1074,10 @@
     function overview() {
       const filtered = patients.filter(p => (filter === 'all' || p.status === filter) &&
         `${p.patientName} ${p.caregiverName}`.toLowerCase().includes(search.toLowerCase()));
-      return stats() + `<h2>${view==='attention'?'Prioritized follow-up':'Patient roster'}</h2>` +
-        table(view === 'attention' ? filtered.filter(p => ['red', 'yellow'].includes(p.status) || (p.attentionReasons || []).length).sort((a,
+      const role = viewRole();
+      const queue = filtered.filter(p => (['red', 'yellow'].includes(p.status) || (p.attentionReasons || []).length) && (role === 'all' || ownsPatient(p, role)));
+      return stats() + `<h2>${view==='attention'?'Prioritized follow-up':'Patient roster'}</h2>` + (view === 'attention' ? `<div class="toolbar">${everyoneToggle()}</div>` : '') +
+        table(view === 'attention' ? queue.sort((a,
           b) => (a.status === 'red' ? -1 : 1) - (b.status === 'red' ? -1 : 1)) : filtered)
     }
 
@@ -1119,7 +1137,7 @@
       // e. Chart signals (the demo forms are in Demo tools).
       const chart = p.chart ? section('chart', 'Chart signals', chartBody(p), true, '<span class="pill">Demo — no real EHR</span>') : '';
       // f. Checklist and 6-month re-check, with the assessment summary.
-      const checklist = section('checklist', 'Checklist and 6-month re-check', `<div class="list">${recheckItem(p)}<div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${ranoutFirst(p.barriers).map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k==='ranout'?' '+doFirstPill:''}${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div>`, true);
+      const checklist = section('checklist', 'Checklist and 6-month re-check', `<div class="list">${recheckItem(p)}<div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${ranoutFirst(p.barriers).map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k==='ranout'?' '+doFirstPill:''}${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${(p.barrierOwners||{})[k]?ownerLabel(p.barrierOwners[k]):'—'}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div>`, true);
       // g. Patient and caregiver answers (age 10+).
       const answers = p.answers ? section('answers', 'Barrier answers, side by side', answersTable(p), true) : '';
       // h. Follow-up note shown on the patient's Today screen.
@@ -1184,11 +1202,39 @@
     }
 
 
-    // Role the worklist is viewed as; remembered in this browser only.
-    let worklistRole = 'all';
+    // "Sign in as" (demo, no password): the owner role this browser acts as. Remembered in this
+    // browser only. A real clinic would use hospital sign-in. Not signed in = everyone is shown.
+    let signedIn = '';
     try {
-      worklistRole = localStorage.getItem('ktx_worklist_role') || 'all'
+      signedIn = localStorage.getItem('ktx_signed_in') || ''
     } catch (e) {}
+    // Off by default: a signed-in role sees only its own patients and tasks until this is ticked.
+    let showEveryone = false;
+    const viewRole = () => !signedIn || showEveryone || !roles.includes(signedIn) ? 'all' : signedIn;
+    // Who is acting, for the audit trail (no real login).
+    const actingAs = () => signedIn || undefined;
+    // Optional person name for a role, from Center setup ("Social worker: Priya").
+    const personOf = role => (center[role] && center[role].person) || '';
+    const ownerLabel = role => esc(role) + (personOf(role) ? ' (' + esc(personOf(role)) + ')' : '');
+
+    // A patient belongs to a role when one of their open tasks is that role's (or needs a team
+    // review, for the Nephrologist / NP / Pharmacist). The Transplant coordinator also gets patients
+    // with no open task yet and the team-meeting items (chart flags, differing answers, re-checks).
+    function ownsPatient(p, role) {
+      const mine = tasks.filter(t => t.patientId === p.id);
+      if (mine.some(t => t.ownerRole === role || (t.needsReview && role === routeOf('Nephrologist / NP / Pharmacist')))) return true;
+      if (role === routeOf('Transplant coordinator')) return !mine.length || !!p.chart?.flags?.length || !!p.answers?.differ?.length || (p.rechecks || []).some(r => r.due);
+      return false
+    }
+    const everyoneToggle = () => signedIn && roles.includes(signedIn) ?
+      `<label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showEveryone" ${showEveryone?'checked':''}> Show everyone</label><span class="muted" id="showingWho">${showEveryone?'Showing everyone.':'Showing only '+ownerLabel(signedIn)+'.'}</span>` :
+      '<span class="muted" id="showingWho">Not signed in: showing everyone. Use “Sign in as” at the top to see only your work.</span>';
+
+    function renderSignIn() {
+      const box = el('signInBox');
+      if (!box || box.contains(document.activeElement)) return;
+      box.innerHTML = `<label for="signInAs">Sign in as (demo, no password)</label><select id="signInAs"><option value="">Not signed in</option>${roles.map(r=>`<option value="${esc(r)}" ${signedIn===r?'selected':''}>${esc(r)}${personOf(r)?' ('+esc(personOf(r))+')':''}</option>`).join('')}</select><span class="meta">Demo only. A real clinic would use hospital sign-in.</span>`
+    }
     const longDate = s => s ? new Date(s).toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -1241,7 +1287,7 @@
     }
 
     function worklist() {
-      const role = worklistRole === 'all' || roles.includes(worklistRole) ? worklistRole : 'all';
+      const role = viewRole();
       // A barrier that needs team review also shows for the Nephrologist / NP / Pharmacist (as routed);
       // it stays with its own owner too.
       const mine = tasks.filter(x => role === 'all' || x.ownerRole === role || (x.needsReview && role === routeOf('Nephrologist / NP / Pharmacist')));
@@ -1280,7 +1326,7 @@
         `<div class="taskgroup" data-group="digest"><h3>This week's check-ins</h3>${weekDigest('weekDigest')}</div>` : '';
       const body = shown.filter(([g]) => ['review', 'overdue', 'today', 'needs'].includes(g)).map(section).join('') + digestGroup + recheckGroup + differGroup + chartGroup +
         shown.filter(([g]) => ['coming', 'later'].includes(g)).map(section).join('');
-      return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
+      return `<div class="panel"><div class="toolbar">${everyoneToggle()}<label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all (including plans not due)</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
     }
 
     // ---- Families: enroll, personal links ----
@@ -1402,9 +1448,9 @@
       const rows = packetRoles.map((r, i) => {
         const opts = [...onStaff.filter(x => x !== r), outsidePartner];
         const sel = d[r].routeTo && opts.includes(d[r].routeTo) ? d[r].routeTo : '';
-        return `<tr data-role="${esc(r)}"><td><strong>${esc(r)}</strong></td><td><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-onstaff="${i}" ${d[r].onStaff?'checked':''}> We have this role on staff</label></td><td>${d[r].onStaff?'<span class="muted">Handles its own tasks</span>':`<select data-route="${i}" aria-label="Where ${esc(r)} tasks go"><option value="">Choose where its tasks go…</option>${opts.map(o=>`<option value="${esc(o)}" ${sel===o?'selected':''}>${esc(o)}</option>`).join('')}</select>`}</td></tr>`
+        return `<tr data-role="${esc(r)}"><td><strong>${esc(r)}</strong></td><td><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-onstaff="${i}" ${d[r].onStaff?'checked':''}> We have this role on staff</label></td><td><input data-person-name="${i}" maxlength="45" value="${esc(d[r].person||'')}" placeholder="Optional, e.g. Priya" aria-label="Person name for ${esc(r)}" style="width:170px"></td><td>${d[r].onStaff?'<span class="muted">Handles its own tasks</span>':`<select data-route="${i}" aria-label="Where ${esc(r)} tasks go"><option value="">Choose where its tasks go…</option>${opts.map(o=>`<option value="${esc(o)}" ${sel===o?'selected':''}>${esc(o)}</option>`).join('')}</select>`}</td></tr>`
       }).join('');
-      return `<div class="panel" id="centerPanel"><h2>Center setup</h2><p class="muted">The owner for each barrier comes from the packet (page 5) and is site specific. If a role is not on staff, choose where its tasks go instead. Changing this re-routes open tasks and is logged.</p><div class="scroll"><table class="center"><thead><tr><th>Owner role</th><th>On staff?</th><th>If not, its tasks go to</th></tr></thead><tbody>${rows}</tbody></table></div><div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="button" id="saveCenter">Save center setup</button><span id="centerMsg" class="muted" role="status"></span></div></div>`
+      return `<div class="panel" id="centerPanel"><h2>Center setup</h2><p class="muted">The owner for each barrier comes from the packet (page 5) and is site specific. If a role is not on staff, choose where its tasks go instead. Changing this re-routes open tasks and is logged. A person name is optional and only labels the role (demo, no real logins).</p><div class="scroll"><table class="center"><thead><tr><th>Owner role</th><th>On staff?</th><th>Person (optional)</th><th>If not, its tasks go to</th></tr></thead><tbody>${rows}</tbody></table></div><div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="button" id="saveCenter">Save center setup</button><span id="centerMsg" class="muted" role="status"></span></div></div>`
     }
 
     function enroll() {
@@ -1435,7 +1481,7 @@
         Object.fromEntries(planInputIds.filter(id => el(id)).map(id => [id, el(id).value]));
       el('heading').textContent = selected ? 'Patient detail' : ({
         overview: 'Patient overview',
-        worklist: 'My worklist',
+        worklist: signedIn && viewRole() === signedIn && personOf(signedIn) ? personOf(signedIn) + "'s worklist" : 'My worklist',
         attention: 'Attention queue',
         reports: 'Insights & reports',
         guide: 'Demo guide',
@@ -1448,6 +1494,7 @@
         'Monitor check-ins and coordinate follow-up across the care journey.';
       document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset
         .view === view));
+      renderSignIn();
       el('content').innerHTML = selected ? detail(patients.find(p => p.id === selected) || {
         id: selected
       }) : view === 'reports' ? reports() : view === 'guide' ? guide() : view === 'worklist' ? worklist() :
@@ -1504,7 +1551,8 @@
         const roles = Object.entries(centerDraft || {}).map(([role, v]) => ({
           role,
           onStaff: v.onStaff,
-          routeTo: v.onStaff ? null : v.routeTo || null
+          routeTo: v.onStaff ? null : v.routeTo || null,
+          person: (v.person || '').trim() || null
         }));
         b.disabled = true;
         try {
@@ -1719,7 +1767,7 @@
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              by: worklistRole !== 'all' ? worklistRole : undefined
+              by: actingAs()
             })
           });
           if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
@@ -1744,7 +1792,7 @@
             },
             body: JSON.stringify({
               outcome: outcomeBtn.dataset.outcome,
-              by: worklistRole !== 'all' ? worklistRole : undefined
+              by: actingAs()
             })
           });
           if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
@@ -1766,7 +1814,7 @@
       if (savePlanBtn) {
         const id = Number(savePlanBtn.dataset.savePlan);
         const body = {
-          by: worklistRole !== 'all' ? worklistRole : undefined
+          by: actingAs()
         };
         PLAN_INPUTS.forEach(([k]) => body[k] = el('plan_' + k).value);
         body.patientText = el('plan_patientText').value;
@@ -1866,6 +1914,10 @@
     });
     document.addEventListener('input', e => {
       // Who leads follows the age (under 10 / 10-17 / 18+) until it is chosen by hand.
+      if (e.target.dataset.personName !== undefined && centerDraft) {
+        centerDraft[Object.keys(centerDraft)[Number(e.target.dataset.personName)]].person = e.target.value;
+        return
+      }
       if (e.target.id === 'enDob') {
         const age = ageFromDob(e.target.value);
         el('enAgeNow').textContent = age === null ? '' : 'Age today: ' + age;
@@ -1909,7 +1961,7 @@
           },
           body: JSON.stringify({
             leads: sel.value,
-            by: worklistRole !== 'all' ? worklistRole : undefined
+            by: actingAs()
           })
         }).then(async r => {
           if (!r.ok) throw Error((await r.json().catch(() => ({}))).error || 'Unable to save');
@@ -1924,11 +1976,17 @@
         showAllTasks = e.target.checked;
         render()
       }
-      if (e.target.id === 'worklistRole') {
-        worklistRole = e.target.value;
+      if (e.target.id === 'signInAs') {
+        signedIn = e.target.value;
+        showEveryone = false;
         try {
-          localStorage.setItem('ktx_worklist_role', worklistRole)
+          localStorage.setItem('ktx_signed_in', signedIn)
         } catch (err) {}
+        e.target.blur();
+        render()
+      }
+      if (e.target.id === 'showEveryone') {
+        showEveryone = e.target.checked;
         render()
       }
     });
