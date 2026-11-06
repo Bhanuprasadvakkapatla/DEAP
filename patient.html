@@ -1142,6 +1142,9 @@
         workingMsg: 'Your care team says your plan is working. That takes real effort. Keep going at your own pace.',
         took: 'I took my medicine',
         missed: 'I missed a dose',
+        cgTook: '{pt} took the medicine',
+        cgMissed: '{pt} missed a dose',
+        cgPlan: "{pt}'s plan",
         done: 'Thanks for checking in',
         doneSub: 'Your check-in has been saved on this device.',
         missTitle: 'Missed a dose?',
@@ -1368,6 +1371,9 @@
         workingMsg: 'Tu equipo de cuidado dice que tu plan está funcionando. Eso requiere mucho esfuerzo. Sigue a tu propio ritmo.',
         took: 'Tomé mi medicina',
         missed: 'No tomé una dosis',
+        cgTook: '{pt} tomó su medicina',
+        cgMissed: '{pt} no tomó una dosis',
+        cgPlan: 'Plan de {pt}',
         done: 'Gracias por responder',
         doneSub: 'Tu respuesta se guardó en este dispositivo.',
         missTitle: '¿No tomaste una dosis?',
@@ -1804,13 +1810,15 @@
     // Plans the care team agreed with the patient (from the server), in the patient's own words.
     function myPlans() {
       if (isCg10()) return theirPlans();
-      return `<div class="card soft" id="myPlan"><div class="small">${t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
+      return `<div class="card soft" id="myPlan"><div class="small">${isCgChild()?tf('cgPlan',{pt:esc(s.patientName)}):t('plan')}</div>${deapPlans.length?deapPlans.map(p=>`<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span></div>`).join(''):`<h3 style="margin-top:8px">${t('planDefault')}</h3>`}</div>`
     }
 
     // ---- Personal links: who this person is, and what they may see (the server enforces it) ----
     const tf = (k, v = {}) => t(k).replace(/\{(\w+)\}/g, (_, n) => v[n] ?? '');
     // Caregiver of a patient aged 10+: a separate person with their own answers.
     const isCg10 = () => !!(INVITE && deapInvite && deapInvite.person === 'caregiver' && deapInvite.age >= 10);
+    // Caregiver who uses the app for a child under 10: name the child instead of "my".
+    const isCgChild = () => s.role === 'caregiver' && !isCg10() && !!s.patientName.trim();
     const isPt10 = () => !!(INVITE && deapInvite && deapInvite.person === 'patient');
 
     // What a caregiver (10+) sees of the patient: only what the server sent for this link.
@@ -1923,7 +1931,7 @@
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        recheckCard() + textThread() + checkBackCard() + workingCard() + myPlans() + `<div class="card"><div class="iconbubble">${ic('heart')}</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?ic('check')+' '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        recheckCard() + textThread() + checkBackCard() + workingCard() + myPlans() + `<div class="card"><div class="iconbubble">${ic('heart')}</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?ic('check')+' '+t('todayLogged'):isCgChild()?tf('cgTook',{pt:esc(s.patientName)}):t('took'),'took',takenToday?'secondary':'')}${btn(isCgChild()?tf('cgMissed',{pt:esc(s.patientName)}):t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
