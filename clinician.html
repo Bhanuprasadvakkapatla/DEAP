@@ -1134,6 +1134,36 @@
       return head + summary + words + plans + chart + checklist + answers + note + weekly + family + escalation + log + demo
     }
 
+    // This week's check-ins (last 7 days), for the Transplant coordinator: who answered (colour and
+    // note exactly as written) and who did not. Red and yellow first. Built from the weekly answers
+    // the page already has (in-app and by text reply); no new manual work.
+    function weekDigest(id) {
+      const since = Date.now() - 7 * 864e5,
+        order = {
+          red: 0,
+          yellow: 1,
+          green: 2
+        };
+      const answered = [],
+        missing = [];
+      patients.forEach(p => {
+        const w = (p.weekly || []).filter(x => new Date(x.date).getTime() >= since).at(-1);
+        w ? answered.push({
+          p,
+          w
+        }) : missing.push(p)
+      });
+      answered.sort((a, b) => (order[a.w.status] ?? 3) - (order[b.w.status] ?? 3) || String(a.p.patientName).localeCompare(String(b.p.patientName)));
+      missing.sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)));
+      const cap = st => esc(st.charAt(0).toUpperCase() + st.slice(1));
+      const rows = answered.map(({
+        p,
+        w
+      }) => `<div class="item digestrow" data-digest-patient="${esc(p.id)}"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong>${patientName(p)}</strong><span class="pill ${esc(w.status)}">${cap(w.status)}</span><span class="meta" style="margin:0">${esc(shortDate(w.date))}${w.via==='text'?' · via text reply':''}</span><button class="link" data-open="${esc(p.id)}">View →</button></div>${w.note&&w.note.trim()?`<div class="ownwords">${esc(w.note)}</div>`:''}</div>`).join('');
+      const none = missing.length ? `<p class="meta" id="digestMissing"><strong>Did not answer (${missing.length}):</strong> ${missing.map(p=>`<button class="link" data-open="${esc(p.id)}">${patientName(p)}</button>`).join(', ')}</p>` : '<p class="meta" id="digestMissing">Everyone answered this week.</p>';
+      return `<div id="${id}"><p class="muted" style="margin:0 0 8px">Last 7 days: ${answered.length} answered, ${missing.length} did not. Notes are shown exactly as written.</p><div class="list">${rows||'<p class="muted">No weekly answers in the last 7 days.</p>'}</div>${none}</div>`
+    }
+
     // Measures that show whether the loop works (packet page 6), computed on the server.
     function reports() {
       const r = reportData;
@@ -1149,7 +1179,8 @@
       // Who may need more contact between visits (counts of flags already shown; not a prediction).
       const mc = r.moreContact || [];
       const more = `<div class="panel" id="moreContact"><h2>Who may need more contact</h2><p class="muted">Counts the flags we already show. It is not a prediction.</p>${mc.length?`<div class="list">${mc.map(x=>`<div class="item morerow" data-more-patient="${esc(x.id)}"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>${esc(x.name||'Patient')}${x.initial?' '+esc(x.initial)+'.':''}</strong><span class="muted">${x.reasons.length} signals</span></div><div class="chips">${x.reasons.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div><div style="margin-top:6px"><button class="link" data-open="${esc(x.id)}">View patient →</button></div></div>`).join('')}</div>`:'<p class="muted" id="moreContactNone">No one right now.</p>'}</div>`;
-      return more + `<p class="alert" id="reportsNote">Fictional demo data. These measures show how the team would track whether the program works.</p><div class="cards">${stat('repResolved','Barriers resolved',`${r.barriers.resolved} of ${r.barriers.total}`,`${pct(r.barriers.resolved,r.barriers.total)} of barriers have a plan marked “Working” (now Keep checking)`)}${stat('repFollowups','Follow-ups completed on time',`${f.onTime} of ${f.onTime+f.late}`,`${f.late} late · ${f.overdue} still overdue`)}${stat('repNoCall','Answered without a phone call',`${nc.patientCheckbacks+nc.caregiverCheckbacks+nc.textReplies}`,`${nc.patientCheckbacks} patient + ${nc.caregiverCheckbacks} caregiver check-back answers in the app · ${nc.textReplies} weekly answers by text reply`)}${stat('repLevels','Steadier drug levels',`${lv.steady} of ${lv.steady+lv.unsteady}`,`patients whose spread of the last 4 tacrolimus levels is at or below ${lv.threshold} · ${lv.unsteady} above · ${lv.noData} without 4 draws`)}</div><div class="panel"><h2>Open work by owner</h2><p class="muted">Open barrier tasks per role, after Center setup routing.</p><div class="scroll"><table id="ownerWork"><thead><tr><th>Owner</th><th>Needs a plan</th><th>Plan agreed</th><th>Keep checking</th><th>Total</th></tr></thead><tbody>${ownerRows||'<tr><td colspan="5" class="muted">No open tasks.</td></tr>'}</tbody></table></div></div><div class="panel"><h2>Barriers reported</h2><p class="muted">How many patients reported each barrier (Barriers Assessment Tool wording).</p><div class="bars" id="barriersReported">${reported.map(([k,n])=>`<div class="barrow wide"><span>${esc(names[k]||k)}</span><div class="track"><div class="fill" style="width:${100*n/maxN}%"></div></div><strong>${n}</strong></div>`).join('')}</div></div>`
+      const digest = `<div class="panel" id="digestPanel"><h2>This week's check-ins</h2>${weekDigest('weekDigestReports')}</div>`;
+      return more + digest + `<p class="alert" id="reportsNote">Fictional demo data. These measures show how the team would track whether the program works.</p><div class="cards">${stat('repResolved','Barriers resolved',`${r.barriers.resolved} of ${r.barriers.total}`,`${pct(r.barriers.resolved,r.barriers.total)} of barriers have a plan marked “Working” (now Keep checking)`)}${stat('repFollowups','Follow-ups completed on time',`${f.onTime} of ${f.onTime+f.late}`,`${f.late} late · ${f.overdue} still overdue`)}${stat('repNoCall','Answered without a phone call',`${nc.patientCheckbacks+nc.caregiverCheckbacks+nc.textReplies}`,`${nc.patientCheckbacks} patient + ${nc.caregiverCheckbacks} caregiver check-back answers in the app · ${nc.textReplies} weekly answers by text reply`)}${stat('repLevels','Steadier drug levels',`${lv.steady} of ${lv.steady+lv.unsteady}`,`patients whose spread of the last 4 tacrolimus levels is at or below ${lv.threshold} · ${lv.unsteady} above · ${lv.noData} without 4 draws`)}</div><div class="panel"><h2>Open work by owner</h2><p class="muted">Open barrier tasks per role, after Center setup routing.</p><div class="scroll"><table id="ownerWork"><thead><tr><th>Owner</th><th>Needs a plan</th><th>Plan agreed</th><th>Keep checking</th><th>Total</th></tr></thead><tbody>${ownerRows||'<tr><td colspan="5" class="muted">No open tasks.</td></tr>'}</tbody></table></div></div><div class="panel"><h2>Barriers reported</h2><p class="muted">How many patients reported each barrier (Barriers Assessment Tool wording).</p><div class="bars" id="barriersReported">${reported.map(([k,n])=>`<div class="barrow wide"><span>${esc(names[k]||k)}</span><div class="track"><div class="fill" style="width:${100*n/maxN}%"></div></div><strong>${n}</strong></div>`).join('')}</div></div>`
     }
 
 
@@ -1244,7 +1275,10 @@
       const recheckGroup = rechecks.length ?
         `<div class="taskgroup" data-group="recheck"><h3>Checklist re-check due <span class="muted">(${rechecks.length})</span></h3><div class="list">${rechecks.map(({p,r})=>`<div class="item recheckrow" data-recheck-patient="${esc(p.id)}" data-person="${r.person}"><strong>${patientName(p)}</strong><div>${personLabel(p,r.person)} · last checklist ${esc(shortDate(r.lastDone))}</div><div class="nextaction">→ Ask them to retake the 14-item checklist (it is waiting on their Today screen)</div><div style="margin-top:6px"><button class="link" data-open="${esc(p.id)}">View patient →</button></div></div>`).join('')}</div></div>` :
         '';
-      const body = shown.filter(([g]) => ['review', 'overdue', 'today', 'needs'].includes(g)).map(section).join('') + recheckGroup + differGroup + chartGroup +
+      // This week's check-ins: for the Transplant coordinator (and All).
+      const digestGroup = role === 'all' || role === routeOf('Transplant coordinator') ?
+        `<div class="taskgroup" data-group="digest"><h3>This week's check-ins</h3>${weekDigest('weekDigest')}</div>` : '';
+      const body = shown.filter(([g]) => ['review', 'overdue', 'today', 'needs'].includes(g)).map(section).join('') + digestGroup + recheckGroup + differGroup + chartGroup +
         shown.filter(([g]) => ['coming', 'later'].includes(g)).map(section).join('');
       return `<div class="panel"><div class="toolbar"><label for="worklistRole" class="muted">Viewing as:</label><select id="worklistRole">${roles.map(r=>`<option value="${esc(r)}" ${role===r?'selected':''}>${esc(r)}</option>`).join('')}<option value="all" ${role==='all'?'selected':''}>All</option></select><label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showAllTasks" ${showAllTasks?'checked':''}> Show all</label></div><h2 id="needYou">${needYou?`${needYou} thing${needYou===1?' needs':'s need'} you today`:'Nothing needs you today'}</h2>${body||'<p class="muted">Nothing on your list right now.</p>'}${!showAllTasks&&byGroup.later.length?`<p class="muted">${byGroup.later.length} plan${byGroup.later.length===1?' is':'s are'} working and not due for a check-back. Tick “Show all” to see ${byGroup.later.length===1?'it':'them'}.</p>`:''}</div>`
     }
