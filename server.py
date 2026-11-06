@@ -1374,15 +1374,18 @@ def derive(row, c, chart=False, for_patient=False):
     open_requests = total_requests - handled
     if open_requests:
         reasons.append("Support requested")
-    # "Ran out of medicine" = Yes: listed in the Attention queue, and at least "Follow-up due"
-    # (yellow), until its task has a plan.
-    ranout_open = False
+    # "Ran out of medicine" or "Can't afford the medicine" = Yes: listed in the Attention queue, and
+    # at least "Follow-up due" (yellow), until its task has a plan. In the patient's own app a
+    # barrier only the caregiver reported changes nothing (no reason text, no colour).
+    money_open = False
     for t in c.execute(
-        "SELECT owner_role FROM tasks WHERE patient_id=? AND barrier='ranout' AND status='needs_plan'", (pid,)
+        "SELECT barrier, owner_role FROM tasks WHERE patient_id=? AND barrier IN ('ranout','afford') AND status='needs_plan' ORDER BY barrier='afford'",
+        (pid,),
     ):
-        ranout_open = True
-        if "ranout" not in hidden:
-            reasons.append(f"Ran out of medicine. {t['owner_role']} to follow up.")
+        if t["barrier"] in hidden:
+            continue
+        money_open = True
+        reasons.append(f"{BARRIER_NAMES[t['barrier']]}. {t['owner_role']} to follow up.")
     if state.get("silence"):
         reasons.append("Demo silence flag")
     if stage in ("caregiver_notice", "clinician_review"):
@@ -1414,8 +1417,8 @@ def derive(row, c, chart=False, for_patient=False):
     rank = {"blue": 0, "green": 1, "yellow": 2, "red": 3}
     if overdue and rank[overdue] > rank[status]:
         status = overdue
-    # Ran out of medicine with no plan yet: raise to yellow, never lower (red stays red).
-    if ranout_open and rank[status] < rank["yellow"]:
+    # Ran out of / can't afford medicine with no plan yet: raise to yellow, never lower (red stays red).
+    if money_open and rank[status] < rank["yellow"]:
         status = "yellow"
     extra = {}
     if chart:
