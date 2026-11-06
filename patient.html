@@ -885,6 +885,7 @@
         check_change: 'I want to change it',
         checkSend: 'Send my answer',
         checkThanks: 'Thanks for telling us. Your care team will see your answer.',
+        workingMsg: 'Your care team says your plan is working. That takes real effort. Keep going at your own pace.',
         took: 'I took my medicine',
         missed: 'I missed a dose',
         done: 'Thanks for checking in',
@@ -1104,6 +1105,8 @@
         check_change: 'Quiero cambiarlo',
         checkSend: 'Enviar mi respuesta',
         checkThanks: 'Gracias por contarnos. Tu equipo de cuidado verá tu respuesta.',
+        // Draft translation for the clinical team to review.
+        workingMsg: 'Tu equipo de cuidado dice que tu plan está funcionando. Eso requiere mucho esfuerzo. Sigue a tu propio ritmo.',
         took: 'Tomé mi medicina',
         missed: 'No tomé una dosis',
         done: 'Gracias por responder',
@@ -1524,6 +1527,14 @@
       return `<div class="card" id="checkBack"><div class="iconbubble">✓</div><div class="speakrow"><h3>${t('checkTitle')}</h3>${speakBtn([t('checkTitle'), p.patientText, t('check_working'), t('check_not_really'), t('check_change')].join('. '))}</div><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${['working','not_really','change'].map(k=>`<button class="choice" data-check="${k}" aria-pressed="${checkDraft.answer===k}"><span>${t('check_'+k)}</span><span class="check">${checkDraft.answer===k?'✓':'○'}</span></button>`).join('')}<label class="label" for="checkNote">${t('note')}</label><textarea id="checkNote" class="field" rows="3" maxlength="400">${esc(checkDraft.note)}</textarea><div style="height:12px"></div>${btn(t('checkSend'),'sendCheck')}</div>`
     }
 
+    // A kind word when the care team marked a plan "Working" (keep checking). Only plans this person
+    // may see (the server already left out plans for barriers only the caregiver reported).
+    // No points or badges. Not shown on a caregiver's page about a patient aged 10+.
+    function workingCard() {
+      if (isCg10() || !deapPlans.some(p => p.status === 'keep_checking')) return '';
+      return `<div class="card soft" id="workingMsg"><div class="speakrow"><p style="margin:0">${t('workingMsg')}</p>${speakBtn(t('workingMsg'))}</div></div>`
+    }
+
     // Plans the care team agreed with the patient (from the server), in the patient's own words.
     function myPlans() {
       if (isCg10()) return theirPlans();
@@ -1646,7 +1657,7 @@
           `${t('welcomeName')}, ${esc(s.caregiverName||s.patientName)}!` :
           `${t('welcomeName')}, ${esc(s.patientName)}!`, s.role === 'caregiver' ?
           `${t('caregiverFor')} ${esc(s.patientName)}. ${t('todaySub')}` : t('todaySub')) +
-        recheckCard() + textThread() + checkBackCard() + myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
+        recheckCard() + textThread() + checkBackCard() + workingCard() + myPlans() + `<div class="card"><div class="iconbubble">♡</div><h3>${logged?t('todayLogged'):t('today')}</h3><p class="muted">${logged?t('doneSub'):t('todaySub')}</p>${btn(takenToday?'✓ '+t('todayLogged'):t('took'),'took',takenToday?'secondary':'')}${btn(t('missed'),'missed','outline')}</div><div class="card"><h3>${t('weeklyTitle')}</h3><p class="muted">${t('weeklyDesc')}</p>${btn(t('openWeekly'),'weekly')}</div>${s.silence?`<div class="card soft"><span class="pill yellow">${t('nudge')}</span><p>${t('nudgeText')}</p>${btn(t('edit'),'settings','secondary')}</div>`:''}` +
         foot()
     }
 
