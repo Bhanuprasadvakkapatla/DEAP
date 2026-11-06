@@ -523,6 +523,17 @@
       font-size: 14px
     }
 
+    .modulesfor {
+      font-size: 12px;
+      color: #b5c7d2;
+      margin-top: 14px;
+      line-height: 1.5
+    }
+
+    .side nav button[hidden] {
+      display: none
+    }
+
     .signin {
       display: grid;
       gap: 3px;
@@ -885,6 +896,8 @@
       ⓘ   Demo guide
      </button>
     </nav>
+    <div class="modulesfor" id="modulesFor">
+    </div>
     <div class="sidefoot">
      KTx-CONNECT experience extension
      <br/>
@@ -926,6 +939,16 @@
   </div>
   <script>
     'use strict';
+    // Modules in the left menu for each "Sign in as (demo)" role. A screen choice only, not security.
+    // Placeholder: to be confirmed with the clinic team.
+    // Not signed in, "Show everyone", or a role not listed here: every module, as before.
+    const ROLE_MODULES = {
+      'Transplant coordinator': ['overview', 'worklist', 'attention', 'enroll', 'center', 'reports', 'guide'],
+      'Nephrologist / NP / Pharmacist': ['overview', 'worklist', 'attention', 'reports', 'guide'],
+      'Social worker': ['overview', 'worklist', 'attention', 'guide'],
+      'Psychologist': ['overview', 'worklist', 'attention', 'guide']
+    };
+    const ALL_MODULES = ['overview', 'worklist', 'attention', 'enroll', 'center', 'reports', 'guide'];
     let patients = [],
       tasks = [],
       roles = [],
@@ -1316,6 +1339,22 @@
       `<label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showEveryone" ${showEveryone?'checked':''}> Show everyone</label><span class="muted" id="showingWho">${showEveryone?'Showing everyone.':'Showing only '+ownerLabel(signedIn)+'.'}</span>` :
       '<span class="muted" id="showingWho">Showing everyone.</span>';
 
+    // Modules this browser shows right now (see ROLE_MODULES at the top).
+    const modulesNow = () => !signedIn || showEveryone || !ROLE_MODULES[signedIn] ? ALL_MODULES : ROLE_MODULES[signedIn];
+
+    // Hide the other modules in the menu. A hidden module cannot be shown, even from a stale
+    // selection: it falls back to My worklist.
+    function applyModules() {
+      const allowed = modulesNow();
+      if (!allowed.includes(view)) {
+        view = 'worklist';
+        centerDraft = null
+      }
+      document.querySelectorAll('.side nav [data-view]').forEach(b => b.hidden = !allowed.includes(b.dataset.view));
+      const note = el('modulesFor');
+      if (note) note.textContent = 'Showing modules for: ' + (allowed === ALL_MODULES ? (signedIn && showEveryone ? 'everyone' : 'all roles') : signedIn)
+    }
+
     function renderSignIn() {
       const box = el('signInBox');
       if (!box || box.contains(document.activeElement)) return;
@@ -1587,6 +1626,8 @@
     }
 
     function render() {
+      // Before anything else: a module hidden for this role falls back to My worklist.
+      applyModules();
       const draft = noteHasUnsavedChanges() ? {
         id: selected,
         value: el('carePlan').value
