@@ -1006,6 +1006,10 @@
         noPlanYet: 'The care team will make a plan with {pt}.',
         upcomingChecks: 'Upcoming check-backs',
         theirWeekly: "{pt}'s latest weekly check-in",
+        cgOwnPlans: 'Plans for you',
+        cgOwnDesc: 'For things only you told us about. {pt} does not see these plans.',
+        nextCheck: 'Next check-back',
+        ws_cgOwn: 'Plans for things only you reported are shown to you, not to {pt}.',
         badLink: 'This link is not valid. Please ask your care team for a new one.',
         emergency: 'If someone is unconscious or unresponsive, call 911.'
       },
@@ -1195,6 +1199,10 @@
         noPlanYet: 'El equipo de cuidado hará un plan con {pt}.',
         upcomingChecks: 'Próximos seguimientos',
         theirWeekly: 'Última respuesta semanal de {pt}',
+        cgOwnPlans: 'Planes para ti',
+        cgOwnDesc: 'Para cosas que solo tú nos contaste. {pt} no ve estos planes.',
+        nextCheck: 'Próximo seguimiento',
+        ws_cgOwn: 'Los planes para cosas que solo tú reportaste se te muestran a ti, no a {pt}.',
         badLink: 'Este enlace no es válido. Pide uno nuevo a tu equipo de cuidado.',
         emergency: 'Si alguien está inconsciente o no responde, llama al 911.'
       }
@@ -1238,6 +1246,8 @@
     let toast = '';
     // Agreed plans from the care team (clinician-owned; never saved in the patient's state).
     let deapPlans = [],
+      // Caregiver (patient 10+) only: plans for barriers only the caregiver reported. Never sent to the patient.
+      deapCgPlans = [],
       deapPlansKey = '[]',
       deapRenderPending = false,
       // Demo-only clock offset in days for this patient's check-backs (set by the clinician page).
@@ -1462,12 +1472,14 @@
     const localDay = d => new Date(d).toLocaleDateString('en-CA');
     const effectiveNow = () => new Date(Date.now() + deapClockDays * 864e5);
     const isDue = p => !!p.dueDate && localDay(p.dueDate) <= localDay(effectiveNow());
-    // First plan (biggest problem first) whose current check-back the patient has not answered.
-    const dueCheck = () => deapPlans.find(p => isDue(p) && (s.checkbacks || {})[p.taskId]?.for !== p.dueDate);
+    // Plans this person is asked "Is your plan working?" about. With a personal link, "Who leads"
+    // decides who is asked (set by the server). A caregiver is always asked about plans for
+    // barriers only they reported, because the patient never sees those.
+    const checkPlans = () => [...(INVITE && deapInvite && !deapInvite.getsCheckbacks ? [] : deapPlans), ...(isCg10() ? deapCgPlans : [])];
+    // First plan (biggest problem first) whose current check-back this person has not answered.
+    const dueCheck = () => checkPlans().find(p => isDue(p) && (s.checkbacks || {})[p.taskId]?.for !== p.dueDate);
 
     function checkBackCard() {
-      // With a personal link, "Who leads" decides who is asked (set by the server).
-      if (INVITE && deapInvite && !deapInvite.getsCheckbacks) return '';
       const p = dueCheck();
       if (!p) return '';
       if (checkDraft.taskId !== p.taskId) checkDraft = {
@@ -1501,7 +1513,18 @@
         day: 'numeric'
       }));
       const wk = v.sharedWeekly ? `<div class="small" style="margin-top:10px">${tf('theirWeekly',{pt})}</div><p><span class="pill ${v.sharedWeekly.status==='yellow'?'yellow':v.sharedWeekly.status==='red'?'red':''}">${esc(t(v.sharedWeekly.status).split(' — ')[0])}</span></p>` : '';
-      return `<div class="card soft" id="myPlan"><div class="small">${tf('theirPlans',{pt})}</div>${plans}${dates.length?`<div class="small" style="margin-top:10px">${t('upcomingChecks')}</div><p id="checkDates">${esc(dates.join(' · '))}</p>`:''}${wk}</div>`
+      return `<div class="card soft" id="myPlan"><div class="small">${tf('theirPlans',{pt})}</div>${plans}${dates.length?`<div class="small" style="margin-top:10px">${t('upcomingChecks')}</div><p id="checkDates">${esc(dates.join(' · '))}</p>`:''}${wk}</div>` + cgOwnPlans()
+    }
+
+    // Caregiver (patient 10+): plans for barriers only the caregiver reported. Kept apart from the patient's plans.
+    function cgOwnPlans() {
+      if (!deapCgPlans.length) return '';
+      const pt = esc(deapInvite.patientName);
+      const day = d => new Date(d).toLocaleDateString(s.lang === 'es' ? 'es' : 'en', {
+        month: 'short',
+        day: 'numeric'
+      });
+      return `<div class="card soft" id="cgOwnPlans"><div class="small">${t('cgOwnPlans')}</div><p class="small">${tf('cgOwnDesc',{pt})}</p>${deapCgPlans.map(p=>`<div class="planitem"><div class="speakrow"><p class="planwords">${esc(p.patientText)}</p>${speakBtn(p.patientText)}</div><span class="pill">${t('planFor')}: ${esc(t(p.barrier))}</span>${p.dueDate?`<div class="small" style="margin-top:6px">${t('nextCheck')}: ${esc(day(p.dueDate))}</div>`:''}</div>`).join('')}</div>`
     }
 
     // "Who sees what", in plain words, for this person.
@@ -1522,6 +1545,8 @@
       }) : '', sh.weekly ? tf('ws_cgWeekly', {
         pt
       }) : ''].filter(Boolean).join('; ') + '.', tf('ws_cgNot', {
+        pt
+      }), tf('ws_cgOwn', {
         pt
       })];
       else {
@@ -1701,7 +1726,7 @@
       }
       if (a === 'retake') return retakeChecklist();
       if (a === 'sendCheck') {
-        const p = deapPlans.find(x => x.taskId === checkDraft.taskId);
+        const p = checkPlans().find(x => x.taskId === checkDraft.taskId);
         if (!p) return;
         if (!checkDraft.answer) return notice(t('chooseOne'));
         // Patient-owned answer, kept exactly as written.
@@ -1748,6 +1773,7 @@
           deapCarePlan = '';
           deapLastSent = null;
           deapPlans = [];
+          deapCgPlans = [];
           deapPlansKey = '[]';
           deapClockDays = 0;
           // With a personal link, reset keeps who this person is.
@@ -1981,20 +2007,21 @@
           const el = document.getElementById('deapCarePlan');
           if (el) el.textContent = cp || deapNoNote();
         }
-        deapUpdatePlans(data.patient?.plans || [], data.patient?.clockOffsetDays || 0);
+        deapUpdatePlans(data.patient?.plans || [], data.patient?.clockOffsetDays || 0, data.patient?.caregiverPlans || []);
       } catch (e) {
         deapStatus(false)
       }
     }
 
     // Show new or changed plans; wait while the patient is typing so nothing they type is lost.
-    function deapUpdatePlans(plans, clockDays) {
+    function deapUpdatePlans(plans, clockDays, cgPlans) {
       // Also re-render when what this link may see changes (sharing, who leads, check-back dates).
-      const key = JSON.stringify([plans, clockDays, deapInvite, deapView?.checkbackDates, deapView?.sharedWeekly,
+      const key = JSON.stringify([plans, clockDays, cgPlans, deapInvite, deapView?.checkbackDates, deapView?.sharedWeekly,
         deapView?.recheck
       ]);
       if (key !== deapPlansKey) {
         deapPlans = plans;
+        deapCgPlans = cgPlans;
         deapClockDays = clockDays;
         deapPlansKey = key;
         deapRenderPending = true

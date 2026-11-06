@@ -653,17 +653,19 @@ def invite_view(c, inv):
     who["recheck"] = recheck_info(c, inv["family_id"], owner_person(c, inv["family_id"]) if owns_record(inv) else "caregiver")
     if owns_record(inv):
         # ownState: this person's own saved answers, so a new device can pick them up.
-        return {"invite": who, "patient": derive(prow, c), "ownState": main}
+        return {"invite": who, "patient": derive(prow, c, for_patient=True), "ownState": main}
     # Caregiver of a patient aged 10+ (proposed demo rules): never the patient's checklist
-    # answers, own words, weekly ratings or check-back notes. Plans and the weekly colour only
-    # when the patient shares them; check-back dates always.
+    # answers, own words, weekly ratings or check-back notes. The patient's plans and the weekly
+    # colour only when the patient shares them; check-back dates always. Plans for barriers only
+    # the caregiver reported always go to the caregiver (and never to the patient).
     plans = patient_plans(c, inv["family_id"], main)
     weekly = (weekly_answers(c, inv["family_id"], main) or [None])[-1]
     return {
         "invite": who,
         "ownState": caregiver_state(c, inv["family_id"]),
         "patient": {
-            "plans": plans if sharing["plans"] else [],
+            "plans": [p for p in plans if not p["caregiverOnly"]] if sharing["plans"] else [],
+            "caregiverPlans": [p for p in plans if p["caregiverOnly"]],
             "checkbackDates": sorted(p["dueDate"] for p in plans if p["dueDate"]),
             "sharedWeekly": {"status": weekly["status"], "date": weekly["date"]} if sharing["weekly"] and weekly else None,
             "carePlan": "",
@@ -934,6 +936,25 @@ def reported_by(c, pid, st, barrier):
     return "Both" if p and g else "Caregiver" if g else "Patient"
 
 
+def caregiver_only_barriers(c, pid, st):
+    """Barriers with a task that only the caregiver reported (patient aged 10+).
+
+    The patient has never said Yes to them, now or in an earlier checklist. Their plans,
+    check-back questions and dates go to the caregiver and the care team, never to the patient.
+    """
+    fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
+    if not fam or fam["age"] < 10:
+        return set()
+    said = set(st.get("barriers", []))
+    for r in c.execute("SELECT barriers FROM bat_history WHERE patient_id=? AND person='patient'", (pid,)):
+        said.update(json.loads(r["barriers"]))
+    return {
+        r["barrier"]
+        for r in c.execute("SELECT barrier FROM tasks WHERE patient_id=?", (pid,))
+        if r["barrier"] not in said
+    }
+
+
 def answer_compare(c, pid, st):
     """Patient vs caregiver on the 14 BAT items (age 10+), for the care team only."""
     fam = c.execute("SELECT age FROM families WHERE id=?", (pid,)).fetchone()
@@ -1057,6 +1078,8 @@ def task_view(c, t, st):
         "clockOffsetDays": clock_days(c, t["patient_id"]),
         "isPrimary": st.get("primary") == t["barrier"],
         "reportedBy": reported_by(c, t["patient_id"], st, t["barrier"]),
+        # Only the caregiver reported this barrier: the patient never sees its plan or check-back.
+        "caregiverOnly": t["barrier"] in caregiver_only_barriers(c, t["patient_id"], st),
         "plan": plan_view(current) if current else None,
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
         # The patient's latest check-back answer for this task, exactly as they wrote it.
@@ -1071,12 +1094,17 @@ def task_view(c, t, st):
     }
 
 
-def patient_plans(c, pid, state):
-    """Agreed plans the patient sees, in their own words; the biggest-problem one first."""
+def patient_plans(c, pid, state, only=None):
+    """Agreed plans in the family's own words; the biggest-problem one first.
+
+    only=None: every plan (care team). only="patient": what the patient may see (no plan for a
+    barrier only the caregiver reported). only="caregiver": just those caregiver-only plans.
+    """
     rows = c.execute(
         "SELECT t.id, t.barrier, t.status, t.due_date, p.patient_text FROM tasks t JOIN plans p ON p.task_id = t.id AND p.closed_at IS NULL WHERE t.patient_id=? AND t.status IN ('plan_agreed','keep_checking') ORDER BY t.id",
         (pid,),
     ).fetchall()
+    cg_only = caregiver_only_barriers(c, pid, state)
     plans = [
         {
             "taskId": r["id"],
@@ -1085,9 +1113,14 @@ def patient_plans(c, pid, state):
             "dueDate": r["due_date"],
             "patientText": r["patient_text"],
             "isPrimary": r["barrier"] == state.get("primary"),
+            "caregiverOnly": r["barrier"] in cg_only,
         }
         for r in rows
     ]
+    if only == "patient":
+        plans = [p for p in plans if not p["caregiverOnly"]]
+    elif only == "caregiver":
+        plans = [p for p in plans if p["caregiverOnly"]]
     return sorted(plans, key=lambda p: not p["isPrimary"])
 
 
@@ -1108,10 +1141,12 @@ def acting_role(data):
     return (by if by in OWNER_ROLES else "Clinician portal") + " (demo, no login)"
 
 
-def derive(row, c, chart=False):
-    """One patient record. chart=True only for the care team: chart signals never go to the patient app."""
+def derive(row, c, chart=False, for_patient=False):
+    """One patient record. chart=True only for the care team: chart signals never go to the patient app.
+    for_patient=True: what the patient's own app receives (nothing about caregiver-only barriers)."""
     state = json.loads(row["state"])
     pid = row["id"]
+    hidden = caregiver_only_barriers(c, pid, state) if for_patient else set()
     er = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
     stage = er["stage"] if er else "none"
     reasons = []
@@ -1124,7 +1159,8 @@ def derive(row, c, chart=False):
     for t in c.execute(
         "SELECT owner_role FROM tasks WHERE patient_id=? AND barrier='ranout' AND status='needs_plan'", (pid,)
     ):
-        reasons.append(f"Ran out of medicine. {t['owner_role']} to follow up.")
+        if "ranout" not in hidden:
+            reasons.append(f"Ran out of medicine. {t['owner_role']} to follow up.")
     if state.get("silence"):
         reasons.append("Demo silence flag")
     if stage in ("caregiver_notice", "clinician_review"):
@@ -1192,7 +1228,7 @@ def derive(row, c, chart=False):
             + row["demo_offset_hours"],
         ),
         carePlan=row["care_plan"],
-        plans=patient_plans(c, pid, state),
+        plans=patient_plans(c, pid, state, only="patient" if for_patient else None),
         clockOffsetDays=row["plan_clock_days"],
         # Who handles each barrier at this center (after any center-setup routing).
         barrierOwners={
@@ -1456,7 +1492,7 @@ class Handler(SimpleHTTPRequestHandler):
         if is_family(c, row["id"]):
             return {"error": "Use your personal link"}, 403
         recalc(c, row)
-        return {"patient": derive(row, c)}, 200
+        return {"patient": derive(row, c, for_patient=True)}, 200
 
     def do_HEAD(self):
         path, _ = self.route()
@@ -1508,7 +1544,7 @@ class Handler(SimpleHTTPRequestHandler):
             if is_family(c, pid):
                 return self.json({"error": "Use your personal link"}, 403)
             row = save_main_state(c, pid, state)
-            reply = {"patient": derive(row, c)}
+            reply = {"patient": derive(row, c, for_patient=True)}
         # Sent only after the block above has committed.
         return self.json(reply)
 

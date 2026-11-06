@@ -350,6 +350,11 @@
       padding: 10px 12px
     }
 
+    .pill.cgonly {
+      background: #f1e8fb;
+      color: #5b3a85
+    }
+
     .meta.routed {
       color: #5a6f80;
       font-style: italic
@@ -873,9 +878,11 @@
       const a = t.patientAnswer,
         w = t.latestWeekly;
       const ans = a ? `<div class="patientsays"><small>Patient says</small> <strong style="display:inline">${esc(answerNames[a.answer]||a.answer)}</strong>${a.note&&a.note.trim()?`<div class="ownwords">${esc(a.note)}</div>`:''}<div class="meta">${esc(longDate(a.at))} · ${a.for===t.dueDate?'for this check-back':'for an earlier check-back'}</div></div>` :
-        '<div class="meta">No check-back answer from the patient yet.</div>';
+        // A caregiver-only plan is never shown to the patient, so only the caregiver can answer.
+        (t.caregiverOnly ? '' : '<div class="meta">No check-back answer from the patient yet.</div>');
       const ca = t.caregiverAnswer;
-      const cg = ca ? `<div class="patientsays"><small>Caregiver says</small> <strong style="display:inline">${esc(answerNames[ca.answer]||ca.answer)}</strong>${ca.note&&ca.note.trim()?`<div class="ownwords">${esc(ca.note)}</div>`:''}<div class="meta">${esc(longDate(ca.at))} · ${ca.for===t.dueDate?'for this check-back':'for an earlier check-back'}</div></div>` : '';
+      const cg = ca ? `<div class="patientsays"><small>Caregiver says</small> <strong style="display:inline">${esc(answerNames[ca.answer]||ca.answer)}</strong>${ca.note&&ca.note.trim()?`<div class="ownwords">${esc(ca.note)}</div>`:''}<div class="meta">${esc(longDate(ca.at))} · ${ca.for===t.dueDate?'for this check-back':'for an earlier check-back'}</div></div>` :
+        t.caregiverOnly ? '<div class="meta">No check-back answer from the caregiver yet.</div>' : '';
       const wk = w ? `<div class="meta">Latest weekly answer: <strong style="display:inline">${esc(w.status.charAt(0).toUpperCase()+w.status.slice(1))}</strong> · ${esc(shortDate(w.date))}${w.via==='text'?' · via text reply':''}${w.note&&w.note.trim()?' · “'+esc(w.note)+'”':''}</div>` :
         '<div class="meta">No weekly answer yet.</div>';
       return `<div class="patientctx">${ans}${cg}${wk}</div>`
@@ -904,8 +911,8 @@
       return `<div class="panel full" id="chartPanel"><h2>Chart signals <span class="pill">Demo — no real EHR</span></h2>${ch.hasData?`<div class="detail"><div><small class="muted">Last ${ch.recentLevels.length} level${ch.recentLevels.length===1?'':'s'}</small>${levels}<p class="muted" id="chartSpread">Spread (standard deviation) of last 4: ${ch.spread===null?'needs 4 draws':esc(ch.spread.toFixed(1))}</p></div><div class="list"><div class="item"><small>Last clinic visit</small><strong>${esc(ch.lastVisit?shortDate(ch.lastVisit+'T12:00:00'):'None on record')}</strong></div><div class="item"><small>Last lab</small><strong>${esc(ch.lastLab?shortDate(ch.lastLab+'T12:00:00'):'None on record')}</strong></div></div></div>`:'<p class="muted">No chart data for this patient.</p>'}<div class="list" id="chartFlags" style="margin-top:12px">${ch.flags.length?ch.flags.map(f=>`<div class="item chartflag">${esc(f.text)}</div>`).join(''):'<p class="muted">No chart flags.</p>'}</div>${p.chartMismatch?`<p class="mismatch" id="chartMismatch">${MISMATCH}</p>`:''}${ch.flags.length?'<p class="muted">For review at the weekly team meeting.</p>':''}<div class="democlock" id="labForm"><strong>Demo: add a lab result</strong><span class="pill">Demo — no real EHR</span><label class="muted" for="labDate">Date</label><input type="date" id="labDate" value="${new Date().toLocaleDateString('en-CA')}"><label class="muted" for="labLevel">Tacrolimus (ng/mL)</label><input type="number" id="labLevel" step="0.1" min="0" style="width:110px"><button class="button small secondary" id="addLab">Add lab result</button><span id="labResult" class="muted" role="status"></span></div></div>`
     }
 
-    function planSummary(pl) {
-      return `<div class="plansum">${PLAN_INPUTS.map(([k,label])=>`<div><small>${label}</small> ${esc(pl[k])}</div>`).join('')}<div class="patientsees"><small>Patient sees</small><div class="ownwords">${esc(pl.patientText)}</div></div><div class="meta">Agreed ${esc(longDate(pl.createdAt))} · ${esc(pl.createdBy)}</div></div>`
+    function planSummary(pl, cgOnly) {
+      return `<div class="plansum">${PLAN_INPUTS.map(([k,label])=>`<div><small>${label}</small> ${esc(pl[k])}</div>`).join('')}<div class="patientsees"><small>${cgOnly?'Caregiver sees':'Patient sees'}</small><div class="ownwords">${esc(pl.patientText)}</div></div><div class="meta">Agreed ${esc(longDate(pl.createdAt))} · ${esc(pl.createdBy)}</div></div>`
     }
 
     function planForm(t) {
@@ -915,7 +922,7 @@
         '<p>The packet has no action plan for this item.</p>';
       const adjust = planFormMode === 'adjust' && t.plan;
       const v = k => adjust ? esc(t.plan[k]) : '';
-      return `<div class="planform" id="planForm" data-task="${t.id}"><div class="planfields"><p class="muted" style="margin-top:0">${adjust?'Adjust the plan with the patient. The current version is kept in the history.':'Make this plan with the patient, not for them.'}</p>${PLAN_INPUTS.map(([k,label,hint])=>`<label for="plan_${k}">${label}</label><input id="plan_${k}" maxlength="400" placeholder="${esc(hint)}" value="${v(k)}">`).join('')}<label for="plan_patientText">Plan in the patient's own words <span class="meta">(this is what the patient will see)</span></label><textarea id="plan_patientText" maxlength="400" style="min-height:80px">${v('patientText')}</textarea><div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap"><button class="button" data-save-plan="${t.id}">${adjust?'Save adjusted plan':'Save plan'}</button><button class="button secondary" data-cancel-plan>Cancel</button><span id="planResult" class="muted" role="status"></span></div></div><div class="plancontext"><h3>For reference</h3><small>Ideas the patient ticked</small><p>${ticked.length?ticked.map(k=>esc(strategyNames[k]||k)).join('<br>'):'None ticked for this barrier.'}</p>${t.ownWords&&t.ownWords.trim()?`<small>In the patient's own words</small><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Packet options for this barrier</small>${options}</div></div>`
+      return `<div class="planform" id="planForm" data-task="${t.id}"><div class="planfields"><p class="muted" style="margin-top:0">${adjust?'Adjust the plan with the patient. The current version is kept in the history.':'Make this plan with the patient, not for them.'}</p>${PLAN_INPUTS.map(([k,label,hint])=>`<label for="plan_${k}">${label}</label><input id="plan_${k}" maxlength="400" placeholder="${esc(hint)}" value="${v(k)}">`).join('')}<label for="plan_patientText">Plan in the patient's own words <span class="meta">${t.caregiverOnly?'(only the caregiver reported this barrier: this is what the caregiver will see; the patient will not see this plan)':'(this is what the patient will see)'}</span></label><textarea id="plan_patientText" maxlength="400" style="min-height:80px">${v('patientText')}</textarea><div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap"><button class="button" data-save-plan="${t.id}">${adjust?'Save adjusted plan':'Save plan'}</button><button class="button secondary" data-cancel-plan>Cancel</button><span id="planResult" class="muted" role="status"></span></div></div><div class="plancontext"><h3>For reference</h3><small>Ideas the patient ticked</small><p>${ticked.length?ticked.map(k=>esc(strategyNames[k]||k)).join('<br>'):'None ticked for this barrier.'}</p>${t.ownWords&&t.ownWords.trim()?`<small>In the patient's own words</small><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Packet options for this barrier</small>${options}</div></div>`
     }
 
     // One barrier task. showPatient: in the worklist, name the patient.
@@ -927,7 +934,7 @@
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
         `<span class="muted">Check-back outcome:</span><button class="button small secondary" data-outcome="working" data-task="${t.id}">Working</button><button class="button small secondary" data-outcome="not_working" data-task="${t.id}">Not working</button><button class="button small secondary" data-adjust="${t.id}">Adjust</button>` :
         '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}${t.routedReason?`<div class="meta routed">${esc(t.routedReason)}</div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span>${t.caregiverOnly?'<span class="pill cgonly">Visible to caregiver only</span> ':''}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}${t.routedReason?`<div class="meta routed">${esc(t.routedReason)}</div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan,t.caregiverOnly)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
     }
 
     function stats() {
@@ -1018,7 +1025,7 @@
           ca = t.caregiverAnswer;
         if (a && a.for === t.dueDate) return 'Check back: ' + (saysNext[a.answer] || a.answer);
         if (ca && ca.for === t.dueDate) return 'Check back: ' + (saysNext[ca.answer] || ca.answer).replace('patient', 'caregiver');
-        return 'Check back: no answer from the patient yet'
+        return 'Check back: no answer from the ' + (t.caregiverOnly ? 'caregiver' : 'patient') + ' yet'
       }
       return (g === 'later' ? 'Keep checking · next check-back ' : 'Check back on ') + shortDate(t.dueDate)
     }
