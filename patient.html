@@ -1185,7 +1185,7 @@
         chooseOne: 'Please choose one option.',
         requestSaved: 'Care-team contact request saved in demo.',
         shiftLabel: 'Use a flexible time',
-        reminderMsg: 'Hi! A gentle reminder to follow the medicine plan you made with your care team.',
+        reminderMsg: 'A gentle reminder to follow the medicine plan you made with your care team.',
         reminderShort: 'Time to check your medicine plan.',
         reminderEnc: 'You have got this. Check your medicine plan when it fits your day.',
         // Discreet mode: neutral wording for anything a friend might see (no transplant/medicine/pills/dose).
@@ -1412,7 +1412,7 @@
         chooseOne: 'Elige una opción.',
         requestSaved: 'Solicitud guardada en la demostración.',
         shiftLabel: 'Usar un horario flexible',
-        reminderMsg: '¡Hola! Un recordatorio amable para seguir el plan de medicina que hiciste con tu equipo.',
+        reminderMsg: 'Un recordatorio amable para seguir el plan de medicina que hiciste con tu equipo.',
         reminderShort: 'Es hora de revisar tu plan de medicina.',
         reminderEnc: 'Tú puedes. Revisa tu plan de medicina cuando sea buen momento.',
         discreetLabel: 'Modo discreto (palabras neutras en mensajes y vistas previas)',
@@ -1686,14 +1686,15 @@
       return [...s.weekly, ...texts].sort((a, b) => String(a.date).localeCompare(String(b.date)))
     }
 
+    // Reminder preview. The greeting uses the reader's own name (the caregiver on the caregiver's page).
     function message() {
+      const name = (s.role === 'caregiver' && s.caregiverName.trim() ? s.caregiverName : s.patientName).trim();
       if (isDiscreet()) {
         const tone = s.tone === 'short' ? 'd_remShort' : s.tone === 'encouraging' ? 'd_remEnc' : 'd_remFriendly';
-        return hi() + t(tone) + (s.shift ? ' ' + t('shiftLabel') + '.' : '') + (s.routine ? ' ' + (s.lang === 'es' ?
+        return (s.lang === 'es' ? 'Hola' : 'Hi') + (name ? ' ' + name : '') + ', ' + t(tone) + (s.shift ? ' ' + t('shiftLabel') + '.' : '') + (s.routine ? ' ' + (s.lang === 'es' ?
           'Tu rutina: ' : 'Your routine: ') + s.routine + '.' : '')
       }
-      const name = s.patientName.trim();
-      const greeting = name ? (s.lang === 'es' ? 'Hola, ' : 'Hi, ') + name + '! ' : '';
+      const greeting = name ? (s.lang === 'es' ? '¡Hola, ' : 'Hi, ') + name + '! ' : '';
       const tone = s.tone === 'short' ? 'reminderShort' : s.tone === 'encouraging' ? 'reminderEnc' :
         'reminderMsg';
       return greeting + t(tone) + (s.shift ? ' ' + t('shiftLabel') + '.' : '') + (s.routine ? ' ' + (s
