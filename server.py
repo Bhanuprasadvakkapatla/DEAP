@@ -1155,10 +1155,13 @@ def derive(row, c, chart=False, for_patient=False):
     open_requests = total_requests - handled
     if open_requests:
         reasons.append("Support requested")
-    # "Ran out of medicine" = Yes: listed in the Attention queue until its task has a plan (colour unchanged).
+    # "Ran out of medicine" = Yes: listed in the Attention queue, and at least "Follow-up due"
+    # (yellow), until its task has a plan.
+    ranout_open = False
     for t in c.execute(
         "SELECT owner_role FROM tasks WHERE patient_id=? AND barrier='ranout' AND status='needs_plan'", (pid,)
     ):
+        ranout_open = True
         if "ranout" not in hidden:
             reasons.append(f"Ran out of medicine. {t['owner_role']} to follow up.")
     if state.get("silence"):
@@ -1192,6 +1195,9 @@ def derive(row, c, chart=False, for_patient=False):
     rank = {"blue": 0, "green": 1, "yellow": 2, "red": 3}
     if overdue and rank[overdue] > rank[status]:
         status = overdue
+    # Ran out of medicine with no plan yet: raise to yellow, never lower (red stays red).
+    if ranout_open and rank[status] < rank["yellow"]:
+        status = "yellow"
     extra = {}
     if chart:
         signals = chart_signals(c, pid)
