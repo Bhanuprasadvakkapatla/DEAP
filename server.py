@@ -57,6 +57,29 @@ BARRIER_OWNERS = {
     "other": "Transplant coordinator",  # to review and re-route
 }
 OWNER_ROLES = list(dict.fromkeys(BARRIER_OWNERS.values()))
+# Center setup (packet judge question 5; page 5: the owner mapping is site specific). A role that is
+# not on staff sends its tasks to another role on staff, or to an outside partner.
+OUTSIDE_PARTNER = "Outside partner (e.g., regional telehealth)"
+
+
+def center_setup(c):
+    """{role: {"onStaff": bool, "routeTo": str|None}}. Default: every role on staff."""
+    rows = {r["role"]: r for r in c.execute("SELECT * FROM center_roles")}
+    return {
+        role: {
+            "onStaff": bool(rows[role]["on_staff"]) if role in rows else True,
+            "routeTo": rows[role]["route_to"] if role in rows else None,
+        }
+        for role in OWNER_ROLES
+    }
+
+
+def route_role(setup, home):
+    """Who handles tasks for this packet role at this center, and why (None if not re-routed)."""
+    s = setup.get(home, {"onStaff": True})
+    if s["onStaff"] or not s.get("routeTo"):
+        return home, None
+    return s["routeTo"], f"Routed to {s['routeTo']} (no {home[0].lower() + home[1:]} on staff)"
 # Task status: needs_plan -> plan_agreed -> keep_checking (MAPS steps 4-5, packet page 4).
 TASK_STATUSES = ("needs_plan", "plan_agreed", "keep_checking")
 # The owner checks back within 2 weeks of agreeing a plan (packet page 4).
@@ -159,6 +182,15 @@ def init():
             "CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT NOT NULL, assessment TEXT NOT NULL, barrier TEXT NOT NULL, owner_role TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'needs_plan', created_at TEXT NOT NULL, plan TEXT, due_date TEXT, outcome TEXT, UNIQUE(patient_id, assessment, barrier))"
         )
         c.execute("UPDATE tasks SET status='needs_plan' WHERE status='open'")
+        # home_role: the packet owner for the barrier; owner_role: who handles it at this center.
+        if "home_role" not in [r["name"] for r in c.execute("PRAGMA table_info(tasks)")]:
+            c.execute("ALTER TABLE tasks ADD COLUMN home_role TEXT")
+        for r in c.execute("SELECT id, barrier FROM tasks WHERE home_role IS NULL").fetchall():
+            c.execute("UPDATE tasks SET home_role=? WHERE id=?", (BARRIER_OWNERS.get(r["barrier"], ""), r["id"]))
+        # Center setup: which owner roles are on staff and where the others' tasks go.
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS center_roles (role TEXT PRIMARY KEY, on_staff INTEGER NOT NULL DEFAULT 1, route_to TEXT)"
+        )
         # Clinician-owned plans, one row per version. The open row (closed_at IS NULL) is
         # the current plan; closed rows keep the history with their outcome.
         c.execute(
@@ -309,6 +341,40 @@ def create_family(c, first, initial, age, lang, caregiver, leads=None):
         )
     event(c, fid, "enrolled", f"Family enrolled (age {age}, {LEADS_NAMES[leads or default_leads(age)]}); personal links created")
     return fid
+
+
+def save_center(c, data):
+    """Save which roles are on staff and where the others' tasks go; re-route open tasks."""
+    given = {r.get("role"): r for r in data.get("roles", []) if isinstance(r, dict)}
+    if set(given) != set(OWNER_ROLES):
+        return {"error": "Send all four owner roles"}, 400
+    on = {role for role in OWNER_ROLES if given[role].get("onStaff") is True}
+    for role in OWNER_ROLES:
+        if role not in on:
+            to = given[role].get("routeTo")
+            if to != OUTSIDE_PARTNER and to not in on:
+                return {"error": f"Choose where {role} tasks go: a role on staff or an outside partner"}, 400
+    before = center_setup(c)
+    for role in OWNER_ROLES:
+        c.execute(
+            "INSERT INTO center_roles(role,on_staff,route_to) VALUES (?,?,?) ON CONFLICT(role) DO UPDATE SET on_staff=excluded.on_staff, route_to=excluded.route_to",
+            (role, int(role in on), None if role in on else given[role]["routeTo"]),
+        )
+    setup = center_setup(c)
+    changed = [r for r in OWNER_ROLES if before[r] != setup[r]]
+    if changed:
+        event(c, "center", "center_setup", "Center setup changed: " + "; ".join(
+            f"{r}: {'on staff' if setup[r]['onStaff'] else 'not on staff, tasks go to ' + setup[r]['routeTo']}" for r in changed))
+    # Re-route every open task to who handles it now.
+    moved = 0
+    for t in c.execute("SELECT id, patient_id, barrier, owner_role, home_role FROM tasks WHERE status IN ('needs_plan','plan_agreed','keep_checking')").fetchall():
+        home = t["home_role"] or BARRIER_OWNERS.get(t["barrier"], "")
+        owner, why = route_role(setup, home)
+        if owner != t["owner_role"]:
+            c.execute("UPDATE tasks SET owner_role=? WHERE id=?", (owner, t["id"]))
+            event(c, t["patient_id"], "rerouted", f"Task for '{t['barrier']}' re-routed from {t['owner_role']} to {owner} (center setup{': ' + why if why else ''})")
+            moved += 1
+    return {"center": setup, "rerouted": moved}, 200
 
 
 def owner_person(c, pid):
@@ -846,13 +912,15 @@ def sync_tasks(c, pid, state):
             (pid,),
         )
     }
+    setup = center_setup(c)
     for b in yes:
         if b not in existing:
+            owner, _ = route_role(setup, BARRIER_OWNERS[b])
             c.execute(
-                "INSERT INTO tasks(patient_id,assessment,barrier,owner_role,status,created_at) VALUES (?,?,?,?,'needs_plan',?)",
-                (pid, assessment, b, BARRIER_OWNERS[b], iso()),
+                "INSERT INTO tasks(patient_id,assessment,barrier,owner_role,home_role,status,created_at) VALUES (?,?,?,?,?,'needs_plan',?)",
+                (pid, assessment, b, owner, BARRIER_OWNERS[b], iso()),
             )
-            event(c, pid, "task_created", f"Task for {BARRIER_OWNERS[b]}: barrier '{b}'")
+            event(c, pid, "task_created", f"Task for {owner}: barrier '{b}'")
     for b, r in existing.items():
         if b not in yes and r["status"] == "needs_plan":
             c.execute("DELETE FROM tasks WHERE id=?", (r["id"],))
@@ -914,6 +982,11 @@ def task_view(c, t, st):
         "patientLastInitial": st.get("patientLastInitial", ""),
         "barrier": t["barrier"],
         "ownerRole": t["owner_role"],
+        "homeRole": t["home_role"] or BARRIER_OWNERS.get(t["barrier"], ""),
+        # Why this task is not with its usual (packet) owner, from the center setup.
+        "routedReason": route_role(center_setup(c), t["home_role"] or BARRIER_OWNERS.get(t["barrier"], ""))[1]
+        if t["owner_role"] != (t["home_role"] or BARRIER_OWNERS.get(t["barrier"], ""))
+        else None,
         "status": t["status"],
         "createdAt": t["created_at"],
         "dueDate": t["due_date"],
@@ -1052,8 +1125,11 @@ def derive(row, c, chart=False):
         carePlan=row["care_plan"],
         plans=patient_plans(c, pid, state),
         clockOffsetDays=row["plan_clock_days"],
+        # Who handles each barrier at this center (after any center-setup routing).
         barrierOwners={
-            b: BARRIER_OWNERS[b] for b in state.get("barriers", []) if b in BARRIER_OWNERS
+            b: route_role(center_setup(c), BARRIER_OWNERS[b])[0]
+            for b in state.get("barriers", [])
+            if b in BARRIER_OWNERS
         },
         handledRequests=handled,
         openRequests=open_requests,
@@ -1273,7 +1349,10 @@ class Handler(SimpleHTTPRequestHandler):
                     for r in rows
                     if r["status"] in TASK_STATUSES
                 ]
-            return self.json({"roles": OWNER_ROLES, "tasks": tasks})
+                setup = center_setup(c)
+            # "Viewing as" also offers the outside partner once any role is routed there.
+            roles = OWNER_ROLES + ([OUTSIDE_PARTNER] if any(s["routeTo"] == OUTSIDE_PARTNER and not s["onStaff"] for s in setup.values()) else [])
+            return self.json({"roles": roles, "tasks": tasks, "center": setup, "outsidePartner": OUTSIDE_PARTNER})
         if path == "/api/patients" or (m and not m.group(2)):
             with LOCK, db() as c:
                 reply = self.read_patients(c, path, m)
@@ -1366,6 +1445,10 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/families" and isinstance(data, dict):
             with LOCK, db() as c:
                 reply = self.enroll(c, data)
+            return self.json(*reply)
+        if path == "/api/center" and isinstance(data, dict):
+            with LOCK, db() as c:
+                reply = save_center(c, data)
             return self.json(*reply)
         if path == "/api/sms/inbound" and isinstance(data, dict):
             # Simulated SMS (no real texts are sent or received). Shaped like a texting-service

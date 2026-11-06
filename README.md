@@ -101,6 +101,10 @@ Packet must-keep #6: use risk signals already in the chart. All chart data here 
 
 No target range is shown and levels are never called high or low; we were not given those. Chart flags appear only for the care team (patient detail "Chart signals" and the worklist group "Chart flags — for team review", next action "Review at weekly team meeting"); a flag raises the patient's status to at least yellow. The patient and caregiver app never receives chart data. **Demo: add a lab result** (patient detail, labelled "Demo — no real EHR") adds a fictional result so a flag can appear live.
 
+### Center setup ("What if we have no psychologist?")
+
+The owner mapping is site specific (packet page 5). In **Center setup** the clinician ticks which of the 4 owner roles are on staff; for any role not on staff, its tasks go to another role on staff or to "Outside partner (e.g., regional telehealth)". The setup is stored on the server (`center_roles`). New and existing open tasks follow it, each routed task says why (e.g. "Routed to Social worker (no psychologist on staff)"), and every change is logged. Default: all 4 roles on staff.
+
 ### API
 
 - `GET /api/health`
