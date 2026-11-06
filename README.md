@@ -29,7 +29,7 @@ The 12 demo patients are created with recent check-in times, so after about a da
 python server.py --reset
 ```
 
-This deletes the demo database (`deap_demo.sqlite3`, or the file named in `DEAP_DB`) and re-creates it with 12 fresh demo patients, then starts the server. It prints a message when it does. All patients added during earlier demos are removed.
+This deletes the demo database (`deap_demo.sqlite3`, or the file named in `DEAP_DB`) and re-creates it with fresh demo data (12 demo patients plus the 3 demo families, 15 in all), then starts the server. It prints a message when it does. All patients added during earlier demos are removed.
 
 ### Open the patient app on a phone: `DEAP_HOST`
 
@@ -52,7 +52,7 @@ On start, the server prints the address to open on the phone, for example `http:
 - `patient.html` — patient/caregiver app with backend synchronization and a read-only care-team note.
 - `clinician.html` — clinician roster, attention queue, patient details, reporting, and care-team follow-up notes.
 - `server.py` — Python standard-library HTTP server + JSON API + SQLite database.
-- `deap_demo.sqlite3` — automatically created local database with 12 fictional patient records.
+- `deap_demo.sqlite3` — automatically created local database with 15 fictional patient records (12 patients and 3 families).
 
 Patient data is saved to the browser's localStorage and synchronized to the SQLite backend. Clinician changes are fetched by the patient app every five seconds; the clinician portal refreshes every four seconds. Patient identities are anonymous demo IDs stored in the browser; multiple tabs of the same browser profile share the same demo patient identity. Separate browser profiles create separate patients.
 
@@ -89,7 +89,7 @@ New Spanish text for families (who sees what, sharing, hand-off) is a draft tran
 
 **Discreet mode** (patient setting; default on for ages 10–17): the invite preview, reminder previews, the app header and the tab title use neutral words with no "transplant", "medicine", "pills" or "dose" (for example "Hi Maya, your check-in is ready (1 min)."). Inside the app the normal wording stays. Spanish discreet wording is a draft.
 
-**Demo families** (fictional, based on the packet personas; their links are in each patient's detail): **Maya R., 15, Shared**: Maya and her mom Laura both answered; they differ on one item. **Jordan P., 20, Patient leads**: own words about the hand-off from Mom; Mom (Denise) has a link but has not answered. **Leo S., 8, Parent leads, Spanish**: his mom Ana is the user (caregiver link only).
+**Demo families** (fictional, based on the packet personas; their links are in each patient's detail): **Maya R., 15, Shared**: Maya and her mom Laura both answered; they differ on one item. **Devon P., 20, Patient leads**: own words about the hand-off from Mom; Mom (Denise) has a link but has not answered. **Leo S., 8, Parent leads, Spanish**: his mom Ana is the user (caregiver link only).
 
 ### Chart risk signals (demo — no real EHR)
 

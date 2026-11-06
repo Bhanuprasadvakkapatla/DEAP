@@ -1882,9 +1882,10 @@
     deapBanner.id = 'deapConnection';
     deapBanner.setAttribute('role', 'status');
     deapBanner.style.cssText =
-      'position:fixed;bottom:8px;left:8px;z-index:99;padding:5px 10px;border-radius:20px;background:#e4f5eb;color:#165b46;font:600 11px system-ui;box-shadow:0 2px 9px #0002';
+      'display:inline-block;margin-top:10px;padding:5px 10px;border-radius:20px;background:#e4f5eb;color:#165b46;font:600 11px system-ui';
     deapBanner.textContent = 'Connecting to care-team demo…';
-    document.body.appendChild(deapBanner);
+    // In the header (not floating), so it can never sit on top of the footer text or tab bar.
+    document.querySelector('.top').appendChild(deapBanner);
 
     // Shown when the care team has no follow-up note, in the patient's language.
     const deapNoNote = () => s.lang === 'es' ? 'Tu equipo aún no ha agregado un mensaje.' :

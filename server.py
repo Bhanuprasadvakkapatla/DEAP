@@ -687,7 +687,7 @@ SEED_FAMILIES = [
     ("Maya", "R", 15, "en", "Laura", "shared",
      {"yes": ["forget", "embarrass", "other"], "other": "I forget on weekends and at sleepovers", "weekly": "green"},
      {"yes": ["forget"], "weekly": "green"}),
-    ("Jordan", "P", 20, "en", "Denise", "patient",
+    ("Devon", "P", 20, "en", "Denise", "patient",
      {"yes": ["ranout", "afford", "other"], "other": "Mom used to handle refills and insurance", "weekly": "yellow"},
      None),  # caregiver link exists; Mom has not answered
     ("Leo", "S", 8, "es", "Ana", "parent",
@@ -1804,9 +1804,11 @@ def reset_db():
     for suffix in ("", "-wal", "-shm", "-journal"):
         Path(str(DB) + suffix).unlink(missing_ok=True)
     init()
+    with db() as c:
+        count = c.execute("SELECT COUNT(*) FROM patients").fetchone()[0]
     print(
         ("Demo database reset: deleted and re-created " if existed else "Demo database created: ")
-        + f"{DB} with 12 fresh demo patients (check-in times start from now).",
+        + f"{DB} with {count} fresh demo patients (check-in times start from now).",
         flush=True,
     )
 
