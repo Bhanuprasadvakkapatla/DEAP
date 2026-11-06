@@ -1026,7 +1026,7 @@
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
         `<span class="muted">Check-back outcome:</span><button class="button small secondary" data-outcome="working" data-task="${t.id}">Working</button><button class="button small secondary" data-outcome="not_working" data-task="${t.id}">Not working</button><button class="button small secondary" data-adjust="${t.id}">Adjust</button>` :
         '';
-      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span>${t.caregiverOnly?'<span class="pill cgonly">Visible to caregiver only</span> ':''}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}${t.routedReason?`<div class="meta routed">${esc(t.routedReason)}</div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan,t.caregiverOnly)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
+      return `<div class="item task" data-task-id="${t.id}"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">${head}<span>${t.caregiverOnly?(t.caregiverSees===false?'<span class="pill cgonly">Not shown to patient or caregiver (18+, no permission)</span> ':'<span class="pill cgonly">Visible to caregiver only</span> '):''}<span class="pill">${esc(taskStatusNames[t.status]||t.status)}</span></span></div>${showPatient?`<div>${esc(names[t.barrier]||t.barrier)}</div><div class="nextaction">→ ${esc(nextAction(t))}</div>`:''}${showPatient&&t.barrier==='other'&&t.ownWords&&t.ownWords.trim()?`<div class="meta">In the patient's own words:</div><div class="ownwords">${esc(t.ownWords)}</div>`:''}${t.routedReason?`<div class="meta routed">${esc(t.routedReason)}</div>`:''}<small>Reported by: <b>${esc(t.reportedBy||'Patient')}</b> · ${esc(t.ownerRole)} · came in ${esc(longDate(t.createdAt))}${t.dueDate?' · check back by '+esc(shortDate(t.dueDate)):''}</small>${t.plan?planSummary(t.plan,t.caregiverOnly)+patientSays(t):''}${planHistory(t)}<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">${action}${showPatient?`<button class="link" data-open="${esc(t.patientId)}">View patient →</button>`:''}<span class="muted" role="status" id="taskResult-${t.id}"></span></div>${formOpen?planForm(t):''}</div>`
     }
 
     function stats() {
@@ -1301,13 +1301,26 @@
         pt = esc(p.patientName),
         cg = esc(f.caregiverName),
         sh = p.sharing || {};
-      const lines = f.age < 10 ? [`${cg} is the main user for ${pt} and sees everything about ${pt}.`, 'Care team: sees everything.'] : [
+      const discreet = `${pt}'s discreet mode (neutral words in texts and previews): <b id="discreetNow">${(typeof p.discreet==='boolean'?p.discreet:f.age>=10&&f.age<=17)?'On':'Off'}</b>`;
+      // 18 and over: read-only. Only the patient can give or take back permission.
+      const perm = at => at ? `given by the patient on ${esc(new Date(at).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}))}` : 'not given';
+      const lines = f.age < 10 ? [`${cg} is the main user for ${pt} and sees everything about ${pt}.`, 'Care team: sees everything.'] : f.age >= 18 ? [
         'Care team: sees everything.',
+        `${pt} is 18 or over: nothing about ${pt} is shared with ${cg} without ${pt}'s explicit permission. The care team cannot turn this on.`,
+        `${pt}: sees their own answers, own words, plans and check-backs; never ${cg}'s checklist answers.`,
+        `${cg}: can still answer their own checklist (it comes to the care team). Without permission ${cg} gets no plans, check-back dates, weekly rating, queue reasons or silence notices about ${pt}.`,
+        'Plans for barriers only the caregiver reported are shown to the caregiver, not to the patient (for an adult patient, only with plans permission).',
+        `Sharing permission, plans: <b id="permPlansNow">${perm(sh.permPlansAt)}</b>`,
+        `Sharing permission, weekly check-in: <b id="permWeeklyNow">${perm(sh.permWeeklyAt)}</b>`,
+        discreet
+      ] : [
+        'Care team: sees everything.',
+        `${pt} is under 18: ${pt} chooses what ${cg} sees. For families enrolled under this rule both switches start off and ${pt} is asked at the end of onboarding.`,
         `${pt}: sees their own answers, own words, plans and check-backs; never ${cg}'s checklist answers.`,
         `${cg}: sees their own answers and upcoming check-back dates; not ${pt}'s checklist answers, own words, weekly ratings or check-back notes.`,
         'Plans for barriers only the caregiver reported are shown to the caregiver, not to the patient.',
         `${pt}'s plans shared with ${cg}: <b id="sharePlansNow">${sh.plans?'On':'Off'}</b> · weekly check-in shared: <b id="shareWeeklyNow">${sh.weekly?'On':'Off'}</b> (${pt}'s choice)`,
-        `${pt}'s discreet mode (neutral words in texts and previews): <b id="discreetNow">${(typeof p.discreet==='boolean'?p.discreet:f.age>=10&&f.age<=17)?'On':'Off'}</b>`
+        discreet
       ];
       return `<div class="item" id="whoSeesSummary"><small>Who sees what</small><ul class="whosees">${lines.map(l=>`<li>${l}</li>`).join('')}</ul><div class="meta">Proposed privacy rules for the demo; the clinical team decides the real rules.</div></div>`
     }

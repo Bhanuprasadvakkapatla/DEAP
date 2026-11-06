@@ -1026,6 +1026,18 @@
         cgOwnDesc: 'For things only you told us about. {pt} does not see these plans.',
         nextCheck: 'Next check-back',
         ws_cgOwn: 'Plans for things only you reported are shown to you, not to {pt}.',
+        ws_teen: 'You decide what {cg} sees. Sharing starts off, and you can change it any time.',
+        ws_adult: 'You are 18 or over: nothing is shared with {cg} unless you give permission below. You can take it back at any time, and it stops at once.',
+        ws_cgAdult: '{pt} is 18 or over. You only see what {pt} gives permission to share.',
+        ws_cgAdultNone: 'Right now {pt} has not given permission to share anything with you.',
+        permitPlans: 'I give permission for my care team to share my plans with {cg}',
+        permitWeekly: 'I give permission for my care team to share my weekly check-in with {cg}',
+        permitGiven: 'Permission given on {date}',
+        shareTitle: 'Sharing with {cg}',
+        shareQPlans: 'Do you want your care team to share your plans with {cg}?',
+        shareQWeekly: 'Do you want your care team to share your weekly check-in with {cg}?',
+        shareLater: 'You can change this any time in Settings.',
+        shareBoth: 'Please answer both questions.',
         badLink: 'This link is not valid. Please ask your care team for a new one.',
         emergency: 'If someone is unconscious or unresponsive, call 911.'
       },
@@ -1232,6 +1244,19 @@
         cgOwnDesc: 'Para cosas que solo tú nos contaste. {pt} no ve estos planes.',
         nextCheck: 'Próximo seguimiento',
         ws_cgOwn: 'Los planes para cosas que solo tú reportaste se te muestran a ti, no a {pt}.',
+        // Sharing by age: draft translation for the clinical team to review.
+        ws_teen: 'Tú decides qué ve {cg}. Al principio no se comparte nada, y puedes cambiarlo cuando quieras.',
+        ws_adult: 'Tienes 18 años o más: no se comparte nada con {cg} a menos que des permiso abajo. Puedes quitarlo cuando quieras y deja de compartirse al instante.',
+        ws_cgAdult: '{pt} tiene 18 años o más. Solo ves lo que {pt} da permiso para compartir.',
+        ws_cgAdultNone: 'Por ahora {pt} no ha dado permiso para compartir nada contigo.',
+        permitPlans: 'Doy permiso a mi equipo de cuidado para compartir mis planes con {cg}',
+        permitWeekly: 'Doy permiso a mi equipo de cuidado para compartir mi respuesta semanal con {cg}',
+        permitGiven: 'Permiso dado el {date}',
+        shareTitle: 'Compartir con {cg}',
+        shareQPlans: '¿Quieres que tu equipo de cuidado comparta tus planes con {cg}?',
+        shareQWeekly: '¿Quieres que tu equipo de cuidado comparta tu respuesta semanal con {cg}?',
+        shareLater: 'Puedes cambiar esto cuando quieras en Ajustes.',
+        shareBoth: 'Responde las dos preguntas.',
         badLink: 'Este enlace no es válido. Pide uno nuevo a tu equipo de cuidado.',
         emergency: 'Si alguien está inconsciente o no responde, llama al 911.'
       }
@@ -1451,8 +1476,13 @@
       const helpStep = s.barriers.length && (!s.primary || ideasFor(s.primary).length || strategyMessage[s
         .primary]);
       // With a personal link the server already knows who is answering, so step 0 is skipped.
-      return [...(INVITE ? [] : [0]), 1, ...(s.barriers.length > 1 ? [2] : []), ...(helpStep ? [3] : []), 4];
+      return [...(INVITE ? [] : [0]), 1, ...(s.barriers.length > 1 ? [2] : []), ...(helpStep ? [3] : []), 4, ...(askShare() ? [5] : [])];
     }
+
+    // 10 to 17 (families enrolled under the age rule): at the end of onboarding, ask whether to share
+    // plans and the weekly check-in with the caregiver. Both start off; both must be answered.
+    const askShare = () => !!(isPt10() && deapInvite.age < 18 && deapInvite.sharing?.ask && deapInvite.caregiverName &&
+      (s.step === 5 || typeof s.sharePlans !== 'boolean' || typeof s.shareWeekly !== 'boolean'));
 
     function helpStep() {
       // Keep only ideas that belong to the current biggest barrier.
@@ -1489,11 +1519,18 @@
         .barriers, s.primary, false);
       if (step === 3) out += header(eyebrow, t('strategyTitle'),
         strategyMessage[s.primary] ? '' : t('strategyDesc')) + helpStep();
+      if (step === 5) {
+        const cg = esc(deapInvite.caregiverName);
+        // Neither answer is pre-selected: a button is pressed only after the patient taps it.
+        out += header(eyebrow, tf('shareTitle', {
+          cg
+        }), t('shareLater')) + ['Plans', 'Weekly'].map(k => `<div class="batrow" role="group" aria-labelledby="share-${k}"><div class="batq" id="share-${k}"><span>${tf('shareQ'+k,{cg})}</span>${speakBtn(tf('shareQ'+k,{cg}))}</div><div class="yn">${[true,false].map(v=>`<button class="ynbtn" data-share="${k}" data-val="${v}" aria-pressed="${s['share'+k]===v}">${t(v?'yes':'no')}</button>`).join('')}</div></div>`).join('') + `<p class="small">${t('shareLater')}</p>`
+      }
       if (step === 4) out += header(eyebrow, t('personalize'),
           t('personalizeDesc')) + prefs() +
         `<div class="card soft"><div class="small">${t('preview')} · ${esc(s.channel)}</div><div class="bubble">${esc(message())}</div><div class="small">${t('previewDisclaimer')}</div></div>`;
       out +=
-        `<div class="btnrow">${steps.indexOf(step)>0?btn(t('back'),'back','secondary'):''}${btn(step===4?t('finish'):t('continue'),'next')}</div>`;
+        `<div class="btnrow">${steps.indexOf(step)>0?btn(t('back'),'back','secondary'):''}${btn(step===steps.at(-1)?t('finish'):t('continue'),'next')}</div>`;
       return out + foot()
     }
 
@@ -1577,7 +1614,25 @@
       if (i.person === 'caregiver' && i.age < 10) lines = [tf('ws_under10', {
         pt
       }), t('ws_team')];
-      else if (i.person === 'caregiver') lines = [t('ws_team'), tf('ws_cgPtNot', {
+      else if (i.person === 'caregiver' && sh.adult) {
+        // Patient 18 or over: only what the patient has given explicit permission to share.
+        const seen = [sh.plans ? t('ws_cgDates') : '', sh.plans ? tf('ws_cgPlans', {
+          pt
+        }) : '', sh.weekly ? tf('ws_cgWeekly', {
+          pt
+        }) : ''].filter(Boolean);
+        lines = [t('ws_team'), tf('ws_cgPtNot', {
+          pt
+        }), tf('ws_cgAdult', {
+          pt
+        }), seen.length ? t('ws_cgSees') + ' ' + seen.join('; ') + '.' : tf('ws_cgAdultNone', {
+          pt
+        }), tf('ws_cgNot', {
+          pt
+        }), ...(sh.plans ? [tf('ws_cgOwn', {
+          pt
+        })] : [])]
+      } else if (i.person === 'caregiver') lines = [t('ws_team'), tf('ws_cgPtNot', {
         pt
       }), t('ws_cgSees') + ' ' + [t('ws_cgDates'), sh.plans ? tf('ws_cgPlans', {
         pt
@@ -1588,13 +1643,27 @@
       }), tf('ws_cgOwn', {
         pt
       })];
-      else {
-        lines = [t('ws_team'), tf('ws_ptCgNot', {
+      else if (sh.adult) {
+        // 18 or over: nothing is shared without the patient's explicit permission (recorded with the date).
+        const given = at => at ? `<div class="small" style="margin:-4px 0 8px">${tf('permitGiven',{date:esc(new Date(at).toLocaleDateString(s.lang==='es'?'es':'en',{year:'numeric',month:'short',day:'numeric'}))})}</div>` : '';
+        lines = [t('ws_team'), tf('ws_adult', {
+          cg
+        }), tf('ws_ptCgNot', {
           cg
         }), tf('ws_ptNever', {
           cg
         }), t(isDiscreet() ? 'ws_discreetOn' : 'ws_discreetOff')];
-        // The patient (10+) decides what the caregiver may see.
+        toggles =
+          `<label class="choice" style="font-size:13px"><span>${tf('permitPlans',{cg})}</span><input id="permitPlans" type="checkbox" ${sh.plans?'checked':''}></label>${given(sh.plans&&sh.permPlansAt)}<label class="choice" style="font-size:13px"><span>${tf('permitWeekly',{cg})}</span><input id="permitWeekly" type="checkbox" ${sh.weekly?'checked':''}></label>${given(sh.weekly&&sh.permWeeklyAt)}`
+      } else {
+        lines = [t('ws_team'), tf('ws_teen', {
+          cg
+        }), tf('ws_ptCgNot', {
+          cg
+        }), tf('ws_ptNever', {
+          cg
+        }), t(isDiscreet() ? 'ws_discreetOn' : 'ws_discreetOff')];
+        // The patient (10 to 17) decides what the caregiver may see.
         toggles =
           `<label class="choice" style="font-size:13px"><span>${tf('ws_sharePlans',{cg})}</span><input id="sharePlans" type="checkbox" ${sh.plans?'checked':''}></label><label class="choice" style="font-size:13px"><span>${tf('ws_shareWeekly',{cg})}</span><input id="shareWeekly" type="checkbox" ${sh.weekly?'checked':''}></label>`
       }
@@ -1730,11 +1799,12 @@
         }
         if (s.step === 1) batTried = false;
         if (s.step === 2 && !s.primary) return notice(t('chooseOne'));
-        if (s.step === 4) {
+        if (s.step === 5 && (typeof s.sharePlans !== 'boolean' || typeof s.shareWeekly !== 'boolean')) return notice(t('shareBoth'));
+        const steps = onboardSteps();
+        if (s.step === steps.at(-1)) {
           s.strategies = s.strategies.filter(k => ideasFor(s.primary).includes(k));
           return go('today')
         }
-        const steps = onboardSteps();
         s.step = steps[steps.indexOf(s.step) + 1];
         return go('onboard')
       }
@@ -1844,6 +1914,17 @@
         document.querySelector(`[data-check="${checkDraft.answer}"]`)?.focus();
         return
       }
+      const sh = e.target.closest('[data-share]');
+      if (sh) {
+        const k = sh.dataset.share,
+          v = sh.dataset.val === 'true';
+        s['share' + k] = v;
+        if (deapInvite?.sharing) deapInvite.sharing[k === 'Plans' ? 'plans' : 'weekly'] = v;
+        save();
+        render();
+        document.querySelector(`[data-share="${k}"][data-val="${v}"]`)?.focus();
+        return
+      }
       const bat = e.target.closest('[data-bat]');
       if (bat) {
         const k = bat.dataset.bat,
@@ -1897,6 +1978,17 @@
       // Patient (10+) chooses what the caregiver may see; saved in the patient's own state.
       if (id === 'discreet' || id === 'textCheckin') {
         s[id] = e.target.checked;
+        save();
+        render();
+        return
+      }
+      if (id === 'permitPlans' || id === 'permitWeekly') {
+        s[id] = e.target.checked;
+        if (deapInvite?.sharing) {
+          const k = id === 'permitPlans' ? 'plans' : 'weekly';
+          deapInvite.sharing[k] = e.target.checked;
+          deapInvite.sharing[k === 'plans' ? 'permPlansAt' : 'permWeeklyAt'] = e.target.checked ? new Date().toISOString() : null
+        }
         save();
         render();
         return

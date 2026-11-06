@@ -271,6 +271,12 @@ def init():
         # Date of birth (YYYY-MM-DD). Rows made before this column existed keep using the stored age.
         if "dob" not in [r["name"] for r in c.execute("PRAGMA table_info(families)")]:
             c.execute("ALTER TABLE families ADD COLUMN dob TEXT")
+        # Sharing with the caregiver. share_ask=1: the age rule (10 to 17 start off and are asked).
+        # perm_*_at: when a patient aged 18+ gave explicit permission (NULL = not given).
+        fcols = [r["name"] for r in c.execute("PRAGMA table_info(families)")]
+        for col, kind in (("share_ask", "INTEGER NOT NULL DEFAULT 0"), ("perm_plans_at", "TEXT"), ("perm_weekly_at", "TEXT")):
+            if col not in fcols:
+                c.execute(f"ALTER TABLE families ADD COLUMN {col} {kind}")
         c.execute(
             "CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, family_id TEXT NOT NULL, person TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(family_id) REFERENCES families(id))"
         )
@@ -378,7 +384,7 @@ def init():
             seed_chart(c)
 
 
-def create_family(c, first, initial, dob, lang, caregiver, leads=None):
+def create_family(c, first, initial, dob, lang, caregiver, leads=None, ask_sharing=True):
     """Enroll a family: one patient record plus a personal link per person. Returns the family id.
     dob is a date; the age at enrolment is also stored (used only if the date of birth is missing)."""
     age = age_on(dob, NOW().date())
@@ -402,8 +408,8 @@ def create_family(c, first, initial, dob, lang, caregiver, leads=None):
         (fid, json.dumps(state), "", iso(), iso()),
     )
     c.execute(
-        "INSERT INTO families(id,age,dob,leads,caregiver_name,created_at,lang) VALUES (?,?,?,?,?,?,?)",
-        (fid, age, dob.isoformat(), leads or default_leads(age), caregiver, iso(), lang),
+        "INSERT INTO families(id,age,dob,leads,caregiver_name,created_at,lang,share_ask) VALUES (?,?,?,?,?,?,?,?)",
+        (fid, age, dob.isoformat(), leads or default_leads(age), caregiver, iso(), lang, int(ask_sharing)),
     )
     for person in (["caregiver"] if age < 10 else ["patient", "caregiver"]):
         c.execute(
@@ -647,6 +653,8 @@ def save_main_state(c, pid, state):
         sync_tasks(c, pid, state)
         record_bat(c, pid, owner_person(c, pid), state)
     log_checkbacks(c, pid, old.get("checkbacks") or {}, state.get("checkbacks") or {})
+    if is_family(c, pid):
+        record_permission(c, pid, state)
     row = c.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     recalc(c, row)
     return row
@@ -708,8 +716,13 @@ def invite_view(c, inv):
         "lang": inv["lang"],
         "leads": inv["leads"],
     }
-    sharing = family_sharing(main, inv["leads"])
-    who["sharing"] = sharing
+    sharing = family_sharing(c, inv["family_id"], main)
+    if owns_record(inv):
+        # The patient's own sharing choices and, from 18, when they gave permission.
+        who["sharing"] = sharing
+    else:
+        # The caregiver only learns whether something is shared, not when.
+        who["sharing"] = {"plans": sharing["plans"], "weekly": sharing["weekly"], "adult": sharing["adult"]}
     # Who leads decides who gets reminders and "Is your plan working?" (hand-off of responsibility).
     leads = inv["leads"]
     if inv["age"] < 10:
@@ -729,32 +742,103 @@ def invite_view(c, inv):
         # ownState: this person's own saved answers, so a new device can pick them up.
         return {"invite": who, "patient": derive(prow, c, for_patient=True), "ownState": main}
     # Caregiver of a patient aged 10+ (proposed demo rules): never the patient's checklist
-    # answers, own words, weekly ratings or check-back notes. The patient's plans and the weekly
-    # colour only when the patient shares them; check-back dates always. Plans for barriers only
-    # the caregiver reported always go to the caregiver (and never to the patient).
+    # answers, own words, weekly ratings or check-back notes.
+    # 10 to 17: the patient's plans and weekly colour only when the patient shares them; check-back
+    # dates always; plans for barriers only the caregiver reported always (never to the patient).
+    # 18 and over: nothing about the patient without the patient's explicit, recorded permission.
+    # Plans permission: plans (including the caregiver's own) and check-back dates. Weekly
+    # permission: the weekly colour. Queue reasons and silence notices are never sent to a caregiver.
     plans = patient_plans(c, inv["family_id"], main)
     weekly = (weekly_answers(c, inv["family_id"], main) or [None])[-1]
+    see_plans = sharing["plans"] or not sharing["adult"]
     return {
         "invite": who,
         "ownState": caregiver_state(c, inv["family_id"]),
         "patient": {
             "plans": [p for p in plans if not p["caregiverOnly"]] if sharing["plans"] else [],
-            "caregiverPlans": [p for p in plans if p["caregiverOnly"]],
-            "checkbackDates": sorted(p["dueDate"] for p in plans if p["dueDate"]),
+            "caregiverPlans": [p for p in plans if p["caregiverOnly"]] if see_plans else [],
+            "checkbackDates": sorted(p["dueDate"] for p in plans if p["dueDate"]) if see_plans else [],
             "sharedWeekly": {"status": weekly["status"], "date": weekly["date"]} if sharing["weekly"] and weekly else None,
             "carePlan": "",
-            "clockOffsetDays": prow["plan_clock_days"],
+            "clockOffsetDays": prow["plan_clock_days"] if see_plans else 0,
         },
     }
 
 
-def family_sharing(main, leads):
-    """What the patient (10+) shares with the caregiver. Patient's own setting, or the default."""
+def adult_since(c, fid):
+    """The 18th birthday (a date), or None when the date of birth is not stored."""
+    f = c.execute("SELECT dob FROM families WHERE id=?", (fid,)).fetchone()
+    return add_months(date.fromisoformat(f["dob"]), 12 * 18) if f and f["dob"] else None
+
+
+def family_sharing(c, fid, main):
+    """What the patient (10+) shares with the caregiver.
+
+    10 to 17: the patient's own switches. New families start with both off and the patient is asked
+    at the end of onboarding; families enrolled before this rule keep the old defaults.
+    18 and over: off unless the patient gave explicit permission, recorded by the server with the
+    date. Permission from before the 18th birthday does not count, so turning 18 resets sharing.
+    """
+    f = c.execute(
+        "SELECT age, dob, leads, share_ask, perm_plans_at, perm_weekly_at FROM families WHERE id=?", (fid,)
+    ).fetchone()
+    age = fam_age(f)
+    if age >= 18:
+        since = adult_since(c, fid)
+        ok = lambda at: bool(at) and (since is None or at[:10] >= since.isoformat())
+        return {
+            "plans": ok(f["perm_plans_at"]),
+            "weekly": ok(f["perm_weekly_at"]),
+            "adult": True,
+            "permPlansAt": f["perm_plans_at"] if ok(f["perm_plans_at"]) else None,
+            "permWeeklyAt": f["perm_weekly_at"] if ok(f["perm_weekly_at"]) else None,
+            "ask": False,
+        }
     sp, sw = main.get("sharePlans"), main.get("shareWeekly")
+    off = bool(f["share_ask"])
     return {
-        "plans": sp if isinstance(sp, bool) else leads != "patient",
+        "plans": sp if isinstance(sp, bool) else (False if off else f["leads"] != "patient"),
         "weekly": sw if isinstance(sw, bool) else False,
+        "adult": False,
+        # Ask the two sharing questions at the end of onboarding (patient 10 to 17, new families).
+        "ask": off and 10 <= age < 18,
     }
+
+
+def caregiver_sees_plans(c, fid, main):
+    """Plans (and check-back dates) reach the caregiver: always from 10 to 17, from 18 only with permission."""
+    if not is_family(c, fid) or (family_age(c, fid) or 0) < 10:
+        return True
+    sh = family_sharing(c, fid, main)
+    return sh["plans"] or not sh["adult"]
+
+
+def caregiver_allowed(c, fid):
+    """May the caregiver be told anything about the patient (for example a silence notice)?
+    Under 10 the caregiver is the user. From 10, only if the patient shares something with them."""
+    age = family_age(c, fid)
+    if age is None or age < 10:
+        return True
+    main = json.loads(c.execute("SELECT state FROM patients WHERE id=?", (fid,)).fetchone()["state"])
+    sh = family_sharing(c, fid, main)
+    return sh["plans"] or sh["weekly"]
+
+
+def record_permission(c, fid, state):
+    """18 and over: the patient ticks an explicit permission. The server records when; unticking
+    removes it at once. Kept in the families table, not in the patient's state."""
+    if (family_age(c, fid) or 0) < 18:
+        return
+    f = c.execute("SELECT caregiver_name, perm_plans_at, perm_weekly_at FROM families WHERE id=?", (fid,)).fetchone()
+    since = adult_since(c, fid)
+    for key, col, what in (("permitPlans", "perm_plans_at", "plans"), ("permitWeekly", "perm_weekly_at", "weekly check-in")):
+        have = bool(f[col]) and (since is None or f[col][:10] >= since.isoformat())
+        if state.get(key) is True and not have:
+            c.execute(f"UPDATE families SET {col}=? WHERE id=?", (iso(), fid))
+            event(c, fid, "permission", f"Patient gave permission to share their {what} with {f['caregiver_name']}")
+        elif state.get(key) is not True and f[col]:
+            c.execute(f"UPDATE families SET {col}=NULL WHERE id=?", (fid,))
+            event(c, fid, "permission", f"Patient withdrew permission to share their {what} with {f['caregiver_name']}")
 
 
 # Fictional families based on the packet personas (packet pages 2 and 4).
@@ -802,7 +886,8 @@ def seed_dob(age):
 
 def seed_families(c):
     for first, initial, age, lang, cg, leads, pt, cga in SEED_FAMILIES:
-        fid = create_family(c, first, initial, seed_dob(age), lang, cg, leads)
+        # Seeded families keep the sharing defaults they had before the age rule.
+        fid = create_family(c, first, initial, seed_dob(age), lang, cg, leads, ask_sharing=False)
         if age < 10:
             # The caregiver is the user: their answers are the child's record.
             c.execute("UPDATE patients SET state=? WHERE id=?", (json.dumps(seed_answers(first, initial, cg, lang, "caregiver", cga)), fid))
@@ -1161,6 +1246,8 @@ def task_view(c, t, st):
         "reportedBy": reported_by(c, t["patient_id"], st, t["barrier"]),
         # Only the caregiver reported this barrier: the patient never sees its plan or check-back.
         "caregiverOnly": t["barrier"] in caregiver_only_barriers(c, t["patient_id"], st),
+        # Does the caregiver see this plan? (18 and over: only with the patient's plans permission.)
+        "caregiverSees": caregiver_sees_plans(c, t["patient_id"], st),
         "plan": plan_view(current) if current else None,
         "planHistory": [plan_view(p) for p in plans if p["closed_at"] is not None],
         # The patient's latest check-back answer for this task, exactly as they wrote it.
@@ -1292,7 +1379,7 @@ def derive(row, c, chart=False, for_patient=False):
             "family": family_info(c, pid),
             "rechecks": family_rechecks(c, pid),
             "answers": answer_compare(c, pid, state),
-            "sharing": family_sharing(state, (family_info(c, pid) or {}).get("leads", "")),
+            "sharing": family_sharing(c, pid, state) if is_family(c, pid) else None,
             "chart": signals,
             # Latest weekly answer is Green but the chart has a flag.
             "chartMismatch": bool(signals["flags"]) and latest == "green",
@@ -1363,6 +1450,10 @@ def recalc(c, row):
     # Patient leads: no caregiver notice; only the clinician review stage.
     fam = c.execute("SELECT leads FROM families WHERE id=?", (pid,)).fetchone()
     if fam and fam["leads"] == "patient" and target == "caregiver_notice":
+        target = "none"
+    # From 10, a caregiver notice only when the patient shares something with the caregiver
+    # (18 and over: only with the patient's explicit permission).
+    if fam and target == "caregiver_notice" and not caregiver_allowed(c, pid):
         target = "none"
     old = c.execute("SELECT * FROM escalation WHERE patient_id=?", (pid,)).fetchone()
     if old and old["stage"] == "resolved":
@@ -1455,7 +1546,7 @@ def validate_state(state):
         or not 0 <= state.get("contactRequests", 0) <= 100000
     ):
         return "Invalid support request count"
-    for key in ("silence", "shift", "sharePlans", "shareWeekly", "discreet", "textCheckin"):
+    for key in ("silence", "shift", "sharePlans", "shareWeekly", "permitPlans", "permitWeekly", "discreet", "textCheckin"):
         if key in state and type(state[key]) != bool:
             return "Invalid " + key
     checks = state.get("checkbacks", {})
