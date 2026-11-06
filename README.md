@@ -91,6 +91,8 @@ The clinician enrolls a family (**Enroll family**) with the patient's date of bi
 
 **Hand-off of responsibility.** "Who leads" (set at enrollment, changeable in patient detail; every change is logged) decides who gets reminders and "Is your plan working?" check-backs: Parent leads → caregiver; Shared → both; Patient leads → patient only. A caregiver is only asked about plans the patient shares with them. Under 10 the caregiver always gets them. For Patient leads the 7-day caregiver-notice stage is skipped (clinician review only).
 
+**Languages:** English and Spanish only. The 14-item checklist also exists in Arabic, but Arabic is not built into this demo yet (no machine translation); the enroll form says so and points to the usual interpreter service.
+
 New Spanish text for families (who sees what, sharing, hand-off, the Progress tab, the small headings above screens) is a draft translation for the clinical team to review.
 
 **Look and feel (patient and caregiver pages).** A calm style meant to be discreet, quick and worth opening again: one accent colour, soft cards, simple line icons drawn as inline SVG, larger tap targets (44px or more), short transitions (200ms or less, none with reduced motion), and no mascots, confetti, points, badges or streaks. Dark mode follows the phone by default; Settings > Appearance offers Same as my phone / Light / Dark, saved on the device. Colours are checked for contrast in both modes (text 4.5:1, controls 3:1). No external fonts, images or libraries.
