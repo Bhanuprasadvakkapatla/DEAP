@@ -913,6 +913,11 @@
       // "Something else": not a packet action plan; message set by the team.
       other: 'Thanks for telling us in your own words. Your transplant coordinator will read it and talk with you.'
     };
+    // "Ran out of medicine" goes first wherever a patient's barriers or plans are listed (no medicine
+    // at home). A stable sort: everything else keeps its order.
+    const DO_FIRST = 'Do first: no medicine at home';
+    const doFirstPill = `<span class="pill red dofirst">${DO_FIRST}</span>`;
+    const ranoutFirst = (list, key = x => x) => list.slice().sort((a, b) => (key(b) === 'ranout') - (key(a) === 'ranout'));
     const taskStatusNames = {
       needs_plan: 'Needs a plan',
       plan_agreed: 'Plan agreed',
@@ -1020,7 +1025,7 @@
     // One barrier task. showPatient: in the worklist, name the patient.
     function taskCard(t, showPatient) {
       const who = esc(t.patientName || 'Patient') + (t.patientLastInitial ? ' ' + esc(t.patientLastInitial) + '.' : '');
-      const head = showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`;
+      const head = (showPatient ? `<strong>${who}</strong>` : `<strong>${esc(names[t.barrier]||t.barrier)}</strong>`) + (t.barrier === 'ranout' ? ' ' + doFirstPill : '');
       const formOpen = planFormFor === t.id;
       const action = formOpen ? '' : t.status === 'needs_plan' ?
         `<button class="button small" data-make-plan="${t.id}">Make plan</button>` : t.plan ?
@@ -1074,7 +1079,7 @@
           stage: 'none',
           acknowledged: false
         };
-      const mine = tasks.filter(t => t.patientId === p.id).sort((a, b) => b.isPrimary - a.isPrimary);
+      const mine = ranoutFirst(tasks.filter(t => t.patientId === p.id).sort((a, b) => b.isPrimary - a.isPrimary), t => t.barrier);
       const reasons = p.attentionReasons || [];
       // a. Header: name, status, and the same reason text as the queue.
       const head = `<div style="margin:22px 0"><button class="button secondary" id="back">← Back to roster</button></div><div class="top" style="margin-bottom:6px"><div><h2 style="font-size:26px;margin:0">${patientName(p)}</h2><div class="muted">${p.role==='caregiver'?'Caregiver: '+esc(p.caregiverName||'—')+' · ':''}${esc(p.lang?.toUpperCase())} · ${esc(p.channel)} at ${esc(p.time||'—')}</div></div>${pill(p.status)}</div><p class="reasonline" id="statusReason">${reasons.length?esc(reasons.join(' · ')):'Nothing needs follow-up right now.'}</p>`;
@@ -1102,7 +1107,7 @@
       // e. Chart signals (the demo forms are in Demo tools).
       const chart = p.chart ? section('chart', 'Chart signals', chartBody(p), true, '<span class="pill">Demo — no real EHR</span>') : '';
       // f. Checklist and 6-month re-check, with the assessment summary.
-      const checklist = section('checklist', 'Checklist and 6-month re-check', `<div class="list">${recheckItem(p)}<div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${p.barriers.map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div>`, true);
+      const checklist = section('checklist', 'Checklist and 6-month re-check', `<div class="list">${recheckItem(p)}<div class="item"><small>Primary barrier</small><strong>${esc(names[p.primary]||'Not yet assessed')}</strong></div><div class="item"><small>Selected barriers · who follows up</small>${(p.barriers||[]).length?`<div class="list" id="barrierOwners" style="margin-top:6px">${ranoutFirst(p.barriers).map(k=>`<div><strong style="display:inline">${esc(names[k]||k)}</strong>${k==='ranout'?' '+doFirstPill:''}${k===p.primary?' <span class="pill blue">Biggest problem</span>':''}<div class="meta">${esc((p.barrierOwners||{})[k]||'—')}</div></div>`).join('')}</div>`:'<strong>—</strong>'}</div><div class="item"><small>Selected strategies</small><strong>${esc((p.strategies||[]).map(k=>strategyNames[k]||k).join(', ')||'—')}</strong></div></div>`, true);
       // g. Patient and caregiver answers (age 10+).
       const answers = p.answers ? section('answers', 'Barrier answers, side by side', answersTable(p), true) : '';
       // h. Follow-up note shown on the patient's Today screen.
@@ -1194,6 +1199,7 @@
       const byDue = (a, b) => String(a.dueDate).localeCompare(String(b.dueDate));
       ['overdue', 'today', 'coming', 'later'].forEach(g => byGroup[g].sort(byDue));
       byGroup.needs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      GROUPS.forEach(([g]) => byGroup[g] = ranoutFirst(byGroup[g], t => t.barrier));
       const needYou = byGroup.overdue.length + byGroup.today.length + byGroup.needs.length;
       const shown = GROUPS.filter(([g]) => byGroup[g].length && (g !== 'later' || showAllTasks));
       const section = ([g, label]) =>
