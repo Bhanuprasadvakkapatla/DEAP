@@ -1012,7 +1012,8 @@
         packetMessages[t.barrier] ? `<p>Message the patient saw: “${esc(packetMessages[t.barrier])}”</p>` :
         '<p>The packet has no action plan for this item.</p>';
       const adjust = planFormMode === 'adjust' && t.plan;
-      const v = k => adjust ? esc(t.plan[k]) : '';
+      // A new plan starts "What" from the first idea the patient ticked for this barrier (editable).
+      const v = k => adjust ? esc(t.plan[k]) : k === 'what' && ticked.length ? esc(strategyNames[ticked[0]] || ticked[0]) : '';
       return `<div class="planform" id="planForm" data-task="${t.id}"><div class="planfields"><p class="muted" style="margin-top:0">${adjust?'Adjust the plan with the patient. The current version is kept in the history.':'Make this plan with the patient, not for them.'}</p>${PLAN_INPUTS.map(([k,label,hint])=>`<label for="plan_${k}">${label}</label><input id="plan_${k}" maxlength="400" placeholder="${esc(hint)}" value="${v(k)}">`).join('')}<label for="plan_patientText">Plan in the patient's own words <span class="meta">${t.caregiverOnly?'(only the caregiver reported this barrier: this is what the caregiver will see; the patient will not see this plan)':'(this is what the patient will see)'}</span></label><textarea id="plan_patientText" maxlength="400" style="min-height:80px">${v('patientText')}</textarea><div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap"><button class="button" data-save-plan="${t.id}">${adjust?'Save adjusted plan':'Save plan'}</button><button class="button secondary" data-cancel-plan>Cancel</button><span id="planResult" class="muted" role="status"></span></div></div><div class="plancontext"><h3>For reference</h3><small>Ideas the patient ticked</small><p>${ticked.length?ticked.map(k=>esc(strategyNames[k]||k)).join('<br>'):'None ticked for this barrier.'}</p>${t.ownWords&&t.ownWords.trim()?`<small>In the patient's own words</small><div class="ownwords">${esc(t.ownWords)}</div>`:''}<small>Packet options for this barrier</small>${options}</div></div>`
     }
 
@@ -1336,8 +1337,9 @@
         value: el('carePlan').value
       } : null;
       // Keep anything typed into an open plan form across re-renders.
-      const planDraft = planFormFor === null ? null : Object.fromEntries(planInputIds.filter(id => el(id)).map(
-        id => [id, el(id).value]));
+      // Only for the same task: opening another task's form starts fresh (with its own pre-filled "What").
+      const planDraft = planFormFor === null || Number(el('planForm')?.dataset.task) !== planFormFor ? null :
+        Object.fromEntries(planInputIds.filter(id => el(id)).map(id => [id, el(id).value]));
       el('heading').textContent = selected ? 'Patient detail' : ({
         overview: 'Patient overview',
         worklist: 'My worklist',
